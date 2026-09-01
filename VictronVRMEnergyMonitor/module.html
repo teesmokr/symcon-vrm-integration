@@ -46,9 +46,27 @@
     .vrm .track { fill: none; stroke: var(--arc); stroke-width: 6; stroke-linecap: round; }
     .vrm .fill { fill: none; stroke-width: 6; stroke-linecap: round; }
     .vrm .pnum { fill: var(--muted); font-weight: 600; }
+
+    /* Responsives Portrait-Layout für schmale/mobile Kacheln */
+    .vrm #vrmNarrow { display: none; }
+    @media (max-width: 600px) {
+        .vrm #vrmWide { display: none; }
+        .vrm #vrmNarrow { display: block; }
+    }
+    .vrm .nring { display: block; width: 62%; max-width: 240px; height: auto; margin: 6px auto 14px; }
+    .vrm .nrows { display: flex; flex-direction: column; gap: 12px; padding: 0 6px 8px; }
+    .vrm .nrow.hidden { display: none; }
+    .vrm .nhead { display: flex; align-items: center; gap: 9px; }
+    .vrm .ndot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; }
+    .vrm .nlabel { color: var(--muted); font-size: 15px; flex: 1; }
+    .vrm .nval { color: var(--muted); font-weight: 500; font-size: 15px; white-space: nowrap; }
+    .vrm .nval span { color: var(--text); font-weight: 700; font-size: 22px; }
+    .vrm .nbarwrap { margin-top: 6px; height: 8px; border-radius: 6px; background: var(--arc); overflow: hidden; }
+    .vrm .nbar { height: 100%; width: 0; border-radius: 6px; transition: width .3s ease; }
 </style>
 
 <div class="vrm" id="vrm">
+    <div id="vrmWide">
     <svg viewBox="0 0 1200 560" preserveAspectRatio="xMidYMid meet" aria-label="Victron Energy">
         <!-- dynamisch erzeugte Auslastungsbalken -->
         <g id="vrmArcs"></g>
@@ -113,6 +131,42 @@
             <text x="0" y="32" font-size="34" text-anchor="middle"><tspan class="val" id="vrmExtraVal">–</tspan><tspan class="unit" font-size="24"> W</tspan></text>
         </g>
     </svg>
+    </div>
+
+    <!-- Portrait-/Mobil-Layout -->
+    <div id="vrmNarrow">
+        <svg class="nring" viewBox="0 0 300 300" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+            <circle cx="150" cy="150" r="120" fill="none" stroke="var(--track)" stroke-width="16"/>
+            <circle id="vrmRingN" cx="150" cy="150" r="120" fill="none" stroke="var(--ring)"
+                    stroke-width="16" stroke-linecap="round"
+                    transform="rotate(-90 150 150)" stroke-dasharray="754" stroke-dashoffset="754"/>
+            <text class="lbl" x="150" y="118" font-size="20" text-anchor="middle">Batterie</text>
+            <text x="150" y="176" font-size="64" text-anchor="middle"><tspan class="val" id="vrmSocN" font-weight="700">–</tspan><tspan class="unit" font-size="36">%</tspan></text>
+            <text class="val" x="150" y="208" font-size="18" text-anchor="middle" id="vrmBattSubN">– V  – W</text>
+        </svg>
+        <div class="nrows">
+            <div class="nrow" id="rowGrid">
+                <div class="nhead"><span class="ndot" style="background:var(--ring)"></span><span class="nlabel">Netz</span><span class="nval"><span id="nvalGrid">–</span> W</span></div>
+                <div class="nbarwrap"><div class="nbar" id="nbarGrid"></div></div>
+            </div>
+            <div class="nrow" id="rowSolar">
+                <div class="nhead"><span class="ndot" style="background:var(--solar)"></span><span class="nlabel">Solar</span><span class="nval"><span id="nvalSolar">–</span> W</span></div>
+                <div class="nbarwrap"><div class="nbar" id="nbarSolar"></div></div>
+            </div>
+            <div class="nrow" id="rowAc">
+                <div class="nhead"><span class="ndot" style="background:var(--ring)"></span><span class="nlabel">Verbrauch</span><span class="nval"><span id="nvalAc">–</span> W</span></div>
+                <div class="nbarwrap"><div class="nbar" id="nbarAc"></div></div>
+            </div>
+            <div class="nrow" id="rowDc">
+                <div class="nhead"><span class="ndot" style="background:var(--ring)"></span><span class="nlabel">DC-Last</span><span class="nval"><span id="nvalDc">–</span> W</span></div>
+                <div class="nbarwrap"><div class="nbar" id="nbarDc"></div></div>
+            </div>
+            <div class="nrow" id="rowExtra">
+                <div class="nhead"><span class="ndot" style="background:var(--consumption)"></span><span class="nlabel" id="nlabelExtra">Verbraucher</span><span class="nval"><span id="nvalExtra">–</span> W</span></div>
+                <div class="nbarwrap"><div class="nbar" id="nbarExtra"></div></div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -254,6 +308,49 @@
             if (showCons) { drawSource(arcs, ARCS.ac, ac, d.consPhases, d.maxConsumption, 'var(--ring)', null); }
             if (showDc) { buildBar(arcs, ARCS.dc, dc, d.maxDc, 'var(--ring)'); }
             if (extra) { buildBar(arcs, ARCS.extra, extra.value, extra.max, 'var(--consumption)'); }
+
+            renderNarrow(d, { soc: soc, pct: pct, v: v, grid: grid, pv: pv, batt: batt,
+                ac: ac, dc: dc, extra: extra, showGrid: showGrid, showSolar: showSolar,
+                showCons: showCons, showDc: showDc });
+        }
+
+        function util(value, max) {
+            var v = Math.abs(value || 0);
+            if (v <= THR) { return 0; }
+            return (max > 0 ? clamp01(v / max) : 1) * 100;
+        }
+
+        function nrow(rowId, valId, barId, value, max, color, showFlag) {
+            var row = document.getElementById(rowId);
+            if (!row) { return; }
+            if (showFlag === false) { row.classList.add('hidden'); return; }
+            row.classList.remove('hidden');
+            document.getElementById(valId).textContent = fmt(value);
+            var bar = document.getElementById(barId);
+            bar.style.width = util(value, max) + '%';
+            bar.style.background = color;
+        }
+
+        function renderNarrow(d, c) {
+            var ringN = document.getElementById('vrmRingN');
+            if (!ringN) { return; }
+            var CN = 2 * Math.PI * 120;
+            ringN.setAttribute('stroke-dashoffset', String(CN * (1 - c.pct / 100)));
+            document.getElementById('vrmSocN').textContent = c.soc === null ? '–' : Math.round(c.soc);
+            document.getElementById('vrmBattSubN').textContent =
+                (c.v === null ? '–' : c.v.toFixed(2).replace('.', ',') + ' V') + '  ' + fmt(c.batt) + ' W';
+
+            nrow('rowGrid', 'nvalGrid', 'nbarGrid', c.grid, d.maxGrid, 'var(--ring)', c.showGrid);
+            nrow('rowSolar', 'nvalSolar', 'nbarSolar', c.pv, d.maxPv, 'var(--solar)', c.showSolar);
+            nrow('rowAc', 'nvalAc', 'nbarAc', c.ac, d.maxConsumption, 'var(--ring)', c.showCons);
+            nrow('rowDc', 'nvalDc', 'nbarDc', c.dc, d.maxDc, 'var(--ring)', c.showDc);
+
+            if (c.extra) {
+                document.getElementById('nlabelExtra').textContent = c.extra.name || 'Verbraucher';
+                nrow('rowExtra', 'nvalExtra', 'nbarExtra', c.extra.value || 0, c.extra.max, 'var(--consumption)', true);
+            } else {
+                nrow('rowExtra', 'nvalExtra', 'nbarExtra', 0, 0, 'var(--consumption)', false);
+            }
         }
 
         window.handleMessage = function (data) {

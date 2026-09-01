@@ -20,6 +20,13 @@ Mitte, **0–100 %-Auslastungsbalken** je Quelle/Last und Light- & Dark-Mode.
 |-------|------|
 | ![Energiefluss hell](docs/preview_light.png) | ![Energiefluss dunkel](docs/preview_dark.png) |
 
+Auf schmalen/mobilen Kacheln (Breite < 600 px) schaltet die Kachel automatisch
+auf ein **Portrait-Layout** um: Ring oben, darunter gut lesbare Zeilen mit
+Auslastungsbalken.
+
+<img src="docs/preview_mobile.png" alt="Mobil-/Portrait-Layout" width="320">
+
+
 ## Voraussetzungen
 
 - IP-Symcon **ab Version 7.1** (HTML-SDK für die Kachel-Visualisierung)
