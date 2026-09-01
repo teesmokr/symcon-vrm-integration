@@ -1,13 +1,28 @@
 {
     "elements": [
         {
+            "type": "Select",
+            "name": "DataSource",
+            "caption": "Data source",
+            "options": [
+                {
+                    "caption": "VRM Cloud (access token)",
+                    "value": 0
+                },
+                {
+                    "caption": "MQTT (local, Cerbo/Venus) – beta",
+                    "value": 1
+                }
+            ]
+        },
+        {
             "type": "ExpansionPanel",
             "caption": "VRM access",
             "expanded": true,
             "items": [
                 {
                     "type": "Label",
-                    "caption": "Create a personal access token in the VRM portal under: Preferences → Integrations → Access tokens."
+                    "caption": "For 'VRM Cloud': create a personal access token in the VRM portal under Preferences → Integrations → Access tokens."
                 },
                 {
                     "type": "PasswordTextBox",
@@ -39,6 +54,49 @@
         },
         {
             "type": "ExpansionPanel",
+            "caption": "MQTT (local) – beta",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "For 'MQTT': enable MQTT on the Cerbo GX / Venus OS (Settings → Services → MQTT). The module polls the local broker on each update. Note: MQTT support is beta and has not been tested against a live broker yet – please report back."
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "MqttHost",
+                    "caption": "Host / IP"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "MqttPort",
+                    "caption": "Port",
+                    "minimum": 1,
+                    "maximum": 65535
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "MqttUser",
+                    "caption": "Username (optional)"
+                },
+                {
+                    "type": "PasswordTextBox",
+                    "name": "MqttPassword",
+                    "caption": "Password (optional)"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "MqttPortalId",
+                    "caption": "Portal ID (optional, auto-detected if empty)"
+                },
+                {
+                    "type": "Button",
+                    "caption": "Test MQTT connection",
+                    "onClick": "VRM_TestMqtt($id);"
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
             "caption": "Update",
             "expanded": true,
             "items": [
@@ -47,23 +105,90 @@
                     "name": "UpdateInterval",
                     "caption": "Update interval",
                     "suffix": "seconds",
-                    "minimum": 15,
+                    "minimum": 5,
                     "maximum": 3600
                 },
                 {
                     "type": "Label",
-                    "caption": "Note: The VRM cloud updates the stored values only every few minutes, so a very short interval does not give faster data."
+                    "caption": "Note: The VRM cloud updates the stored values only every few minutes. MQTT is near real-time, so a short interval (e.g. 5–10 s) makes sense there."
                 }
             ]
         },
         {
             "type": "ExpansionPanel",
-            "caption": "Value mapping (advanced)",
+            "caption": "Display / utilization bars",
             "expanded": false,
             "items": [
                 {
                     "type": "Label",
-                    "caption": "The values are detected automatically. If a value stays 0 or is wrong, use 'List available codes', find the correct code(s) and enter them below. Multiple codes are summed (comma separated), e.g. per phase."
+                    "caption": "The arcs show a 0–100 % utilization bar. Enter the rated power (W) that equals 100 % for each."
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "MaxPV",
+                    "caption": "Solar 100 % at (W)",
+                    "minimum": 0
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "MaxGrid",
+                    "caption": "Grid 100 % at (W)",
+                    "minimum": 0
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "MaxConsumption",
+                    "caption": "AC consumption 100 % at (W)",
+                    "minimum": 0
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "MaxDC",
+                    "caption": "DC loads 100 % at (W)",
+                    "minimum": 0
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Second consumer (e.g. heat pump)",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Show an additional consumer at the bottom of the tile, read from any Symcon variable (W)."
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ExtraEnabled",
+                    "caption": "Show second consumer"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "ExtraName",
+                    "caption": "Label"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "ExtraVariable",
+                    "caption": "Power variable (W)"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "ExtraMax",
+                    "caption": "100 % at (W)",
+                    "minimum": 0
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Value mapping (advanced, VRM)",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "VRM only: values are detected automatically. If a value stays 0 or is wrong, use 'List available codes', find the correct code(s) and enter them below. Multiple codes are summed (comma separated), e.g. per phase."
                 },
                 {
                     "type": "Button",
@@ -124,12 +249,12 @@
         {
             "code": 104,
             "icon": "inactive",
-            "caption": "Inactive – please enter access token and select an installation"
+            "caption": "Inactive – configure the selected data source"
         },
         {
             "code": 201,
             "icon": "error",
-            "caption": "Communication error with the VRM API"
+            "caption": "Communication error with the data source"
         }
     ]
 }
