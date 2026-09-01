@@ -50,32 +50,32 @@
 </style>
 
 <div class="vrm" id="vrm">
-    <svg viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet" aria-label="Victron Energy">
+    <svg viewBox="0 0 1200 520" preserveAspectRatio="xMidYMid meet" aria-label="Victron Energy">
         <!-- dynamisch erzeugte Bögen + Flusspunkte -->
         <g id="vrmArcs"></g>
 
         <!-- SOC-Ring -->
-        <circle cx="500" cy="250" r="150" fill="none" stroke="var(--track)" stroke-width="22"/>
-        <circle id="vrmRing" cx="500" cy="250" r="150" fill="none" stroke="var(--ring)"
-                stroke-width="22" stroke-linecap="round"
-                transform="rotate(-90 500 250)" stroke-dasharray="942" stroke-dashoffset="942"/>
+        <circle cx="600" cy="260" r="155" fill="none" stroke="var(--track)" stroke-width="20"/>
+        <circle id="vrmRing" cx="600" cy="260" r="155" fill="none" stroke="var(--ring)"
+                stroke-width="20" stroke-linecap="round"
+                transform="rotate(-90 600 260)" stroke-dasharray="974" stroke-dashoffset="974"/>
 
         <!-- Batterie-Zentrum -->
         <g>
-            <g transform="translate(438 162)">
+            <g transform="translate(538 172)">
                 <rect x="0" y="1" width="20" height="13" rx="2.5" fill="none" stroke="var(--text)" stroke-width="2"/>
                 <line x1="20" y1="4.5" x2="23" y2="4.5" stroke="var(--text)" stroke-width="2.4" stroke-linecap="round"/>
                 <path d="M11 3 L7.5 8.5 L11 8.5 L8 12.5" fill="none" stroke="var(--text)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
             </g>
-            <text class="val" x="470" y="180" font-size="30" font-weight="500" text-anchor="start">Batterie</text>
-            <text x="500" y="288" font-size="104" text-anchor="middle">
+            <text class="val" x="570" y="190" font-size="30" font-weight="500" text-anchor="start">Batterie</text>
+            <text x="600" y="298" font-size="104" text-anchor="middle">
                 <tspan class="val" id="vrmSoc" font-weight="700">–</tspan><tspan class="unit" font-size="60">%</tspan>
             </text>
-            <text class="val" x="500" y="336" font-size="34" font-weight="500" text-anchor="middle" id="vrmBattSub">– V   – W</text>
+            <text class="val" x="600" y="340" font-size="28" font-weight="500" text-anchor="middle" id="vrmBattSub">– V   – W</text>
         </g>
 
         <!-- Netz (links oben) -->
-        <g id="vrmGrid" transform="translate(150 205)">
+        <g id="vrmGrid" transform="translate(140 215)">
             <path d="M-6 -34 l14 8 l-14 8 z" fill="var(--ring)" id="vrmGridArrow"/>
             <g stroke="var(--load)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round" transform="translate(-4 -14)">
                 <path d="M2 0 h12 l-2 10 h-8 z"/><path d="M4 10 l-3 20 M12 10 l3 20 M0 20 h16"/>
@@ -85,7 +85,7 @@
         </g>
 
         <!-- Solar (links unten) -->
-        <g id="vrmSolar" transform="translate(150 320)">
+        <g id="vrmSolar" transform="translate(140 330)">
             <g stroke="var(--solar)" stroke-width="2.4" fill="none" stroke-linecap="round" transform="translate(-2 -12)">
                 <circle cx="8" cy="8" r="4.5"/>
                 <path d="M8 -1 v-3 M8 17 v3 M1 8 h-3 M15 8 h3 M3 3 l-2 -2 M13 13 l2 2 M13 3 l2 -2 M3 13 l-2 2"/>
@@ -94,14 +94,14 @@
         </g>
 
         <!-- AC-Verbrauch (rechts oben) -->
-        <g id="vrmAc" transform="translate(850 205)">
+        <g id="vrmAc" transform="translate(1060 215)">
             <text x="-30" y="8" font-size="52" text-anchor="end"><tspan class="val" id="vrmAcVal">–</tspan><tspan class="unit" font-size="34"> W</tspan></text>
             <path d="M0 0 q4 -9 8 0 q4 9 8 0" transform="translate(-24 -6)" fill="none" stroke="var(--load)" stroke-width="2.4" stroke-linecap="round"/>
             <g id="vrmAcPhases" transform="translate(-40 24)"></g>
         </g>
 
         <!-- DC-Last (rechts unten) -->
-        <g id="vrmDc" transform="translate(850 320)">
+        <g id="vrmDc" transform="translate(1060 330)">
             <text x="-30" y="8" font-size="52" text-anchor="end"><tspan class="val" id="vrmDcVal">–</tspan><tspan class="unit" font-size="34"> W</tspan></text>
             <g transform="translate(-24 -8)" stroke="var(--load)" stroke-width="2.4" stroke-linecap="round">
                 <line x1="0" y1="2" x2="16" y2="2"/><line x1="3" y1="9" x2="13" y2="9" stroke-dasharray="3 3"/>
@@ -113,7 +113,7 @@
 <script>
     (function () {
         var initial = /*__INITIAL_DATA__*/null;
-        var CX = 500, CY = 250, RING = 150, C = 2 * Math.PI * RING;
+        var CX = 600, CY = 260, RING = 155, C = 2 * Math.PI * RING;
         var THR = 3; // W Rauschschwelle
 
         function polar(r, deg) {
@@ -130,12 +130,13 @@
         }
         function fmt(v) { return String(Math.round(v)); }
 
-        // Bogen-Definitionen: sourceDeg (außen/Label) -> ringDeg (nahe Ring)
+        // Bögen sitzen in der Lücke zwischen Werte-Text und Ring.
+        // src = Seite beim Wert, ring = Seite beim Ring.
         var ARCS = {
-            grid:  { r: 205, src: 150, ring: 179 },
-            solar: { r: 205, src: 210, ring: 181 },
-            ac:    { r: 205, src: 30,  ring: 1 },
-            dc:    { r: 205, src: 330, ring: 359 }
+            grid:  { r: 205, src: 152, ring: 178 },
+            solar: { r: 205, src: 208, ring: 182 },
+            ac:    { r: 205, src: 28,  ring: 2 },
+            dc:    { r: 205, src: 332, ring: 358 }
         };
 
         var SVGNS = 'http://www.w3.org/2000/svg';
@@ -165,12 +166,9 @@
         function phaseDots(group, phases, activeColor) {
             while (group.firstChild) { group.removeChild(group.firstChild); }
             for (var i = 0; i < 3; i++) {
-                var on;
-                if (phases && phases.length) {
-                    on = phases[i] !== null && phases[i] !== undefined && Math.abs(phases[i]) > THR;
-                } else {
-                    on = false;
-                }
+                var on = phases && phases.length
+                    ? (phases[i] !== null && phases[i] !== undefined && Math.abs(phases[i]) > THR)
+                    : false;
                 var x = i * 16;
                 var dot = el('circle', { cx: x, cy: 0, r: 4, fill: on ? activeColor : 'var(--muted)' });
                 dot.style.opacity = on ? '1' : '0.45';
@@ -195,38 +193,29 @@
             var pv = d.pv || 0, grid = d.grid || 0, batt = d.battPower || 0;
             var ac = d.consumption || 0, dc = d.dc || 0;
 
-            // Ring
             var ring = document.getElementById('vrmRing');
             var pct = soc === null ? 0 : Math.max(0, Math.min(100, soc));
             ring.setAttribute('stroke-dashoffset', String(C * (1 - pct / 100)));
             document.getElementById('vrmSoc').textContent = soc === null ? '–' : Math.round(soc);
             var v = (d.battVoltage === null || d.battVoltage === undefined) ? null : d.battVoltage;
             document.getElementById('vrmBattSub').textContent =
-                (v === null ? '–' : v.toFixed(2).replace('.', ',') + ' V') + '   ' + fmt(batt) + ' W';
+                (v === null ? '–' : v.toFixed(2).replace('.', ',') + ' V') + '  ' + fmt(batt) + ' W';
 
-            // Werte
             document.getElementById('vrmGridVal').textContent = fmt(grid);
             document.getElementById('vrmSolarVal').textContent = fmt(pv);
             document.getElementById('vrmAcVal').textContent = fmt(ac);
             document.getElementById('vrmDcVal').textContent = fmt(dc);
 
-            // Grid-Richtungspfeil (blau = Bezug)
             document.getElementById('vrmGridArrow').style.opacity = Math.abs(grid) > THR ? '1' : '0';
 
-            // Phasen
             phaseDots(document.getElementById('vrmGridPhases'), d.gridPhases, 'var(--active)');
             phaseDots(document.getElementById('vrmAcPhases'), d.consPhases, 'var(--ring)');
 
-            // Bögen + Flüsse
             var arcs = document.getElementById('vrmArcs');
             while (arcs.firstChild) { arcs.removeChild(arcs.firstChild); }
-            // Solar: immer Richtung Ring
             buildFlow(arcs, ARCS.solar, pv > THR, true, 'var(--solar)', speedFor(pv));
-            // Netz: + Bezug -> Ring, - Einspeisung -> raus
             buildFlow(arcs, ARCS.grid, Math.abs(grid) > THR, grid > 0, 'var(--ring)', speedFor(grid));
-            // AC-Last: Ring -> Verbraucher
             buildFlow(arcs, ARCS.ac, ac > THR, false, 'var(--ring)', speedFor(ac));
-            // DC-Last: Ring -> Verbraucher
             buildFlow(arcs, ARCS.dc, dc > THR, false, 'var(--ring)', speedFor(dc));
         }
 
