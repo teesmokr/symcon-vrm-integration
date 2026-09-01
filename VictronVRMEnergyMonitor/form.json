@@ -77,8 +77,8 @@
                 },
                 {
                     "type": "ValidationTextBox",
-                    "name": "CodePV",
-                    "caption": "Code(s) solar power"
+                    "name": "CodeBatteryVoltage",
+                    "caption": "Code battery voltage"
                 },
                 {
                     "type": "ValidationTextBox",
@@ -87,13 +87,23 @@
                 },
                 {
                     "type": "ValidationTextBox",
+                    "name": "CodePV",
+                    "caption": "Code(s) solar power"
+                },
+                {
+                    "type": "ValidationTextBox",
                     "name": "CodeGrid",
-                    "caption": "Code(s) grid power"
+                    "caption": "Code(s) grid power (per phase e.g. g1,g2,g3)"
                 },
                 {
                     "type": "ValidationTextBox",
                     "name": "CodeConsumption",
-                    "caption": "Code(s) consumption"
+                    "caption": "Code(s) AC consumption (per phase e.g. o1,o2,o3)"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "CodeDC",
+                    "caption": "Code(s) DC loads"
                 }
             ]
         }

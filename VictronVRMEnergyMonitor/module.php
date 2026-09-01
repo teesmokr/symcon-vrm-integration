@@ -25,10 +25,12 @@ class VictronVRMEnergyMonitor extends IPSModule
 
         // Manuelle Code-Overrides (leer = Auto-Erkennung). Mehrere Codes per Komma summieren.
         $this->RegisterPropertyString('CodeSOC', '');
+        $this->RegisterPropertyString('CodeBatteryVoltage', '');
         $this->RegisterPropertyString('CodePV', '');
         $this->RegisterPropertyString('CodeBattery', '');
         $this->RegisterPropertyString('CodeGrid', '');
         $this->RegisterPropertyString('CodeConsumption', '');
+        $this->RegisterPropertyString('CodeDC', '');
 
         // Cache der abgerufenen Anlagen für das Formular
         $this->RegisterAttributeString('Installations', '[]');
@@ -74,11 +76,13 @@ class VictronVRMEnergyMonitor extends IPSModule
     private function registerVariables(): void
     {
         $this->RegisterVariableFloat('SOC', $this->Translate('Battery charge'), '~Battery.100', 10);
-        $this->RegisterVariableFloat('PVPower', $this->Translate('Solar power'), '~Watt', 20);
-        $this->RegisterVariableFloat('BatteryPower', $this->Translate('Battery power'), '~Watt', 30);
+        $this->RegisterVariableFloat('BatteryVoltage', $this->Translate('Battery voltage'), '~Volt', 15);
+        $this->RegisterVariableFloat('BatteryPower', $this->Translate('Battery power'), '~Watt', 20);
+        $this->RegisterVariableFloat('PVPower', $this->Translate('Solar power'), '~Watt', 30);
         $this->RegisterVariableFloat('GridPower', $this->Translate('Grid power'), '~Watt', 40);
-        $this->RegisterVariableFloat('ConsumptionPower', $this->Translate('Consumption'), '~Watt', 50);
-        $this->RegisterVariableInteger('LastUpdate', $this->Translate('Last update'), '~UnixTimestamp', 60);
+        $this->RegisterVariableFloat('ConsumptionPower', $this->Translate('AC consumption'), '~Watt', 50);
+        $this->RegisterVariableFloat('DCPower', $this->Translate('DC loads'), '~Watt', 60);
+        $this->RegisterVariableInteger('LastUpdate', $this->Translate('Last update'), '~UnixTimestamp', 70);
     }
 
     /* ===================== Timer / Datenabruf ===================== */
@@ -97,23 +101,29 @@ class VictronVRMEnergyMonitor extends IPSModule
             return;
         }
 
-        $records = $data['records'];
-        $metrics = $this->detectMetrics($records);
+        $m = $this->detectMetrics($data['records']);
 
-        if ($metrics['SOC'] !== null) {
-            $this->SetValue('SOC', $metrics['SOC']);
+        if ($m['SOC'] !== null) {
+            $this->SetValue('SOC', $m['SOC']);
         }
-        $this->SetValue('PVPower', $metrics['PV'] ?? 0.0);
-        $this->SetValue('BatteryPower', $metrics['Battery'] ?? 0.0);
-        $this->SetValue('GridPower', $metrics['Grid'] ?? 0.0);
-        $this->SetValue('ConsumptionPower', $metrics['Consumption'] ?? 0.0);
+        if ($m['BatteryVoltage'] !== null) {
+            $this->SetValue('BatteryVoltage', $m['BatteryVoltage']);
+        }
+        $this->SetValue('BatteryPower', $m['Battery'] ?? 0.0);
+        $this->SetValue('PVPower', $m['PV'] ?? 0.0);
+        $this->SetValue('GridPower', $m['Grid'] ?? 0.0);
+        $this->SetValue('ConsumptionPower', $m['Consumption'] ?? 0.0);
+        $this->SetValue('DCPower', $m['DC'] ?? 0.0);
         $this->SetValue('LastUpdate', time());
+
+        $snapshot = $this->buildSnapshot($m, time());
+        $this->SetBuffer('Display', json_encode($snapshot));
 
         if ($this->GetStatus() !== 102) {
             $this->SetStatus(102);
         }
 
-        $this->pushToTile();
+        $this->UpdateVisualizationValue(json_encode($snapshot));
     }
 
     /* ===================== Wert-Erkennung ===================== */
@@ -121,7 +131,7 @@ class VictronVRMEnergyMonitor extends IPSModule
     /**
      * Ermittelt die Systemwerte aus den Diagnostics-Records.
      * Reihenfolge je Metrik: manueller Override > bekannte Codes > Beschreibungs-Heuristik.
-     * Rückgabe in Watt bzw. Prozent, Vorzeichen: Netz + = Bezug, Batterie + = Laden.
+     * Werte in Watt bzw. Prozent/Volt. Vorzeichen: Netz + = Bezug, Batterie + = Laden.
      */
     private function detectMetrics(array $records): array
     {
@@ -165,83 +175,136 @@ class VictronVRMEnergyMonitor extends IPSModule
             return $found ? $total : null;
         };
 
+        // Einzelwerte je Code (für Phasen-Punkte)
+        $byCode = function (string $code) use ($records) {
+            foreach ($records as $r) {
+                if (($r['code'] ?? '') === $code && is_numeric($r['rawValue'] ?? null)) {
+                    return (float) $r['rawValue'];
+                }
+            }
+            return null;
+        };
+        $phases = function (array $codes) use ($byCode) {
+            $out = [];
+            $any = false;
+            foreach ($codes as $c) {
+                $v = $byCode($c);
+                if ($v !== null) {
+                    $any = true;
+                }
+                $out[] = $v;
+            }
+            return $any ? $out : [];
+        };
+
         $override = function (string $prop) use ($sumCodes) {
             $raw = trim($this->ReadPropertyString($prop));
             if ($raw === '') {
                 return null;
             }
-            $codes = array_map('trim', explode(',', $raw));
-            return $sumCodes($codes);
+            return $sumCodes(array_map('trim', explode(',', $raw)));
         };
 
         // SOC (%)
-        $soc = $override('CodeSOC');
-        if ($soc === null) {
-            $soc = $sumCodes(['SOC']);
-        }
-        if ($soc === null) {
-            $soc = $firstByDesc(['state of charge']);
-        }
+        $soc = $override('CodeSOC') ?? $sumCodes(['SOC']) ?? $firstByDesc(['state of charge']);
 
-        // PV / Solar (W) – DC-gekoppelt und AC-gekoppelt summieren
-        $pv = $override('CodePV');
-        if ($pv === null) {
-            $pv = $sumCodes(['Pdc', 'PVP']);
-        }
-        if ($pv === null) {
-            $pv = $sumByDesc(['pv - dc-coupled', 'pv - ac-coupled', 'pv power', 'solar']);
-        }
+        // Batteriespannung (V)
+        $bvolt = $override('CodeBatteryVoltage') ?? $byCode('V') ?? $byCode('bv') ?? $firstByDesc(['battery voltage']);
 
-        // Batterieleistung (W)
-        $battery = $override('CodeBattery');
+        // PV / Solar (W) – DC- und AC-gekoppelt
+        $pv = $override('CodePV') ?? $sumCodes(['Pdc', 'PVP'])
+            ?? $sumByDesc(['pv - dc-coupled', 'pv - ac-coupled', 'pv power', 'solar']);
+
+        // Batterieleistung (W); Fallback: U × I
+        $battery = $override('CodeBattery') ?? $sumCodes(['bp', 'Pb']) ?? $firstByDesc(['battery power']);
         if ($battery === null) {
-            $battery = $sumCodes(['bp', 'Pb']);
-        }
-        if ($battery === null) {
-            $battery = $firstByDesc(['battery power']);
-        }
-        if ($battery === null) {
-            // Fallback: aus Spannung × Strom berechnen (Vorzeichen des Stroms = Laderichtung)
-            $v = $sumCodes(['V', 'bv']) ?? $firstByDesc(['battery voltage']);
-            $i = $sumCodes(['I', 'bc']) ?? $firstByDesc(['battery current']);
-            if ($v !== null && $i !== null) {
-                $battery = $v * $i;
+            $i = $byCode('I') ?? $byCode('bc') ?? $firstByDesc(['battery current']);
+            if ($bvolt !== null && $i !== null) {
+                $battery = $bvolt * $i;
             }
         }
 
         // Netzleistung (W) – Summe aller Phasen
-        $grid = $override('CodeGrid');
-        if ($grid === null) {
-            $grid = $sumCodes(['g1', 'g2', 'g3']);
-        }
-        if ($grid === null) {
-            $grid = $sumByDesc(['grid l', 'grid power']);
-        }
+        $grid = $override('CodeGrid') ?? $sumCodes(['g1', 'g2', 'g3']) ?? $sumByDesc(['grid l', 'grid power']);
+        $gridPhases = $phases(['g1', 'g2', 'g3']);
 
-        // Verbrauch / AC-Lasten (W) – Summe aller Phasen
-        $consumption = $override('CodeConsumption');
-        if ($consumption === null) {
-            $consumption = $sumCodes(['o1', 'o2', 'o3']);
-        }
-        if ($consumption === null) {
-            $consumption = $sumByDesc(['ac consumption', 'ac loads', 'consumption l']);
-        }
+        // AC-Verbrauch (W) – Summe aller Phasen
+        $consumption = $override('CodeConsumption') ?? $sumCodes(['o1', 'o2', 'o3'])
+            ?? $sumByDesc(['ac consumption', 'ac loads', 'consumption l']);
+        $consPhases = $phases(['o1', 'o2', 'o3']);
 
-        // Verbrauch notfalls aus Energiebilanz ableiten: Last = PV + Netz + Batterieentladung
+        // DC-Lasten (W)
+        $dc = $override('CodeDC') ?? $sumCodes(['dc_P', 'lo']) ?? $firstByDesc(['dc power', 'dc loads', 'system dc load']);
+
+        // Verbrauch notfalls aus Energiebilanz ableiten: Last = PV + Netz − Batterieladung
         if ($consumption === null && ($pv !== null || $grid !== null || $battery !== null)) {
-            $consumption = (($pv ?? 0.0) + ($grid ?? 0.0) - ($battery ?? 0.0));
-            if ($consumption < 0) {
-                $consumption = 0.0;
-            }
+            $consumption = max(0.0, ($pv ?? 0.0) + ($grid ?? 0.0) - ($battery ?? 0.0));
         }
+
+        $round = fn($v, $d = 1) => $v === null ? null : round($v, $d);
 
         return [
-            'SOC'         => $soc === null ? null : round($soc, 1),
-            'PV'          => $pv === null ? null : round($pv, 1),
-            'Battery'     => $battery === null ? null : round($battery, 1),
-            'Grid'        => $grid === null ? null : round($grid, 1),
-            'Consumption' => $consumption === null ? null : round($consumption, 1),
+            'SOC'            => $round($soc, 0),
+            'BatteryVoltage' => $round($bvolt, 2),
+            'Battery'        => $round($battery, 0),
+            'PV'             => $round($pv, 0),
+            'Grid'           => $round($grid, 0),
+            'GridPhases'     => $gridPhases,
+            'Consumption'    => $round($consumption, 0),
+            'ConsPhases'     => $consPhases,
+            'DC'             => $round($dc, 0),
         ];
+    }
+
+    /* ===================== Snapshot für die Kachel ===================== */
+
+    private function buildSnapshot(array $m, int $ts): array
+    {
+        return [
+            'soc'         => $m['SOC'],
+            'battVoltage' => $m['BatteryVoltage'],
+            'battPower'   => $m['Battery'] ?? 0.0,
+            'pv'          => $m['PV'] ?? 0.0,
+            'grid'        => $m['Grid'] ?? 0.0,
+            'gridPhases'  => $m['GridPhases'] ?? [],
+            'consumption' => $m['Consumption'] ?? 0.0,
+            'consPhases'  => $m['ConsPhases'] ?? [],
+            'dc'          => $m['DC'] ?? 0.0,
+            'timestamp'   => $ts,
+        ];
+    }
+
+    private function currentSnapshot(): array
+    {
+        $buf = $this->GetBuffer('Display');
+        if ($buf !== '') {
+            $decoded = json_decode($buf, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+        // Fallback aus den gespeicherten Variablen (z. B. vor dem ersten Abruf)
+        return [
+            'soc'         => $this->getFloatSafe('SOC'),
+            'battVoltage' => $this->getFloatSafe('BatteryVoltage'),
+            'battPower'   => $this->getFloatSafe('BatteryPower'),
+            'pv'          => $this->getFloatSafe('PVPower'),
+            'grid'        => $this->getFloatSafe('GridPower'),
+            'gridPhases'  => [],
+            'consumption' => $this->getFloatSafe('ConsumptionPower'),
+            'consPhases'  => [],
+            'dc'          => $this->getFloatSafe('DCPower'),
+            'timestamp'   => (int) $this->getFloatSafe('LastUpdate'),
+        ];
+    }
+
+    private function getFloatSafe(string $ident): float
+    {
+        $id = @$this->GetIDForIdent($ident);
+        if ($id === false || $id === 0) {
+            return 0.0;
+        }
+        return (float) GetValue($id);
     }
 
     /* ===================== VRM API ===================== */
@@ -290,14 +353,12 @@ class VictronVRMEnergyMonitor extends IPSModule
     {
         $form = json_decode(file_get_contents(__DIR__ . '/form.json'), true);
 
-        // Zwischengespeicherte Anlagen ins Auswahlfeld einsetzen
         $options = json_decode($this->ReadAttributeString('Installations'), true);
         if (!is_array($options)) {
             $options = [];
         }
         array_unshift($options, ['caption' => $this->Translate('Please select'), 'value' => 0]);
 
-        // Sicherstellen, dass der gespeicherte Wert eine Option besitzt
         $current = $this->ReadPropertyInteger('IdSite');
         if ($current > 0) {
             $exists = false;
@@ -313,13 +374,24 @@ class VictronVRMEnergyMonitor extends IPSModule
         }
 
         foreach ($form['elements'] as &$element) {
-            if (($element['name'] ?? '') === 'IdSite') {
-                $element['options'] = $options;
-            }
+            $this->injectOptions($element, $options);
         }
         unset($element);
 
         return json_encode($form);
+    }
+
+    private function injectOptions(array &$element, array $options): void
+    {
+        if (($element['name'] ?? '') === 'IdSite') {
+            $element['options'] = $options;
+        }
+        if (isset($element['items']) && is_array($element['items'])) {
+            foreach ($element['items'] as &$child) {
+                $this->injectOptions($child, $options);
+            }
+            unset($child);
+        }
     }
 
     /* ===================== Formular-Aktionen ===================== */
@@ -327,7 +399,6 @@ class VictronVRMEnergyMonitor extends IPSModule
     public function LoadInstallations(): void
     {
         if (trim($this->ReadPropertyString('AccessToken')) === '') {
-            $this->UpdateFormField('IdSite', 'caption', $this->Translate('Please enter an access token first'));
             echo $this->Translate('Please enter an access token first');
             return;
         }
@@ -362,11 +433,10 @@ class VictronVRMEnergyMonitor extends IPSModule
             return;
         }
 
-        array_unshift($options, ['caption' => $this->Translate('Please select'), 'value' => 0]);
-        $this->UpdateFormField('IdSite', 'options', json_encode($options));
-        // Bei nur einer Anlage direkt vorbelegen
-        if (count($options) === 2) {
-            $this->UpdateFormField('IdSite', 'value', $options[1]['value']);
+        $display = array_merge([['caption' => $this->Translate('Please select'), 'value' => 0]], $options);
+        $this->UpdateFormField('IdSite', 'options', json_encode($display));
+        if (count($options) === 1) {
+            $this->UpdateFormField('IdSite', 'value', $options[0]['value']);
         }
     }
 
@@ -406,44 +476,15 @@ class VictronVRMEnergyMonitor extends IPSModule
     public function GetVisualizationTile()
     {
         $module = file_get_contents(__DIR__ . '/module.html');
-        // Startwerte einbetten, damit die Kachel sofort etwas anzeigt
-        $initial = json_encode($this->currentValues());
-        $module = str_replace('/*__INITIAL_DATA__*/null', $initial, $module);
-        return $module;
-    }
-
-    private function currentValues(): array
-    {
-        return [
-            'soc'         => $this->getFloatSafe('SOC'),
-            'pv'          => $this->getFloatSafe('PVPower'),
-            'battery'     => $this->getFloatSafe('BatteryPower'),
-            'grid'        => $this->getFloatSafe('GridPower'),
-            'consumption' => $this->getFloatSafe('ConsumptionPower'),
-            'timestamp'   => (int) @$this->GetValue('LastUpdate'),
-        ];
-    }
-
-    private function getFloatSafe(string $ident): float
-    {
-        $id = @$this->GetIDForIdent($ident);
-        if ($id === false || $id === 0) {
-            return 0.0;
-        }
-        return (float) GetValue($id);
-    }
-
-    private function pushToTile(): void
-    {
-        $this->UpdateVisualizationValue(json_encode($this->currentValues()));
+        $initial = json_encode($this->currentSnapshot());
+        return str_replace('/*__INITIAL_DATA__*/null', $initial, $module);
     }
 
     public function RequestAction($Ident, $Value)
     {
         switch ($Ident) {
             case 'RefreshTile':
-                // Anfrage aus der Kachel: aktuelle Werte erneut senden
-                $this->pushToTile();
+                $this->UpdateVisualizationValue(json_encode($this->currentSnapshot()));
                 return;
             case 'UpdateNow':
                 $this->Update();
