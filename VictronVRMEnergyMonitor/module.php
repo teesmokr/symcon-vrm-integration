@@ -2,28 +2,44 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/libs/VictronMqtt.php';
+
 /**
  * Victron VRM Energiemonitor
  *
- * Holt die aktuellen Systemwerte (PV, Batterie, Netz, Verbrauch) über die
- * Victron VRM Cloud-API (Personal Access Token) und stellt sie als Symcon-
- * Variablen sowie als GUIv2-artige HTML-Kachel für die Tile-Visualisierung
- * bereit.
+ * Holt die aktuellen Systemwerte (PV, Batterie, Netz, Verbrauch) wahlweise über
+ * die Victron VRM Cloud-API (Personal Access Token) oder per lokalem MQTT
+ * (Cerbo GX / Venus OS) und stellt sie als Symcon-Variablen sowie als
+ * GUIv2-artige HTML-Kachel für die Tile-Visualisierung bereit.
  */
 class VictronVRMEnergyMonitor extends IPSModule
 {
     private const API_BASE = 'https://vrmapi.victronenergy.com';
 
+    private const SOURCE_VRM  = 0;
+    private const SOURCE_MQTT = 1;
+
     public function Create()
     {
         parent::Create();
 
-        // Zugang
+        // Datenquelle
+        $this->RegisterPropertyInteger('DataSource', self::SOURCE_VRM);
+
+        // VRM Cloud
         $this->RegisterPropertyString('AccessToken', '');
         $this->RegisterPropertyInteger('IdSite', 0);
+
+        // MQTT (lokal, Cerbo/Venus)
+        $this->RegisterPropertyString('MqttHost', '');
+        $this->RegisterPropertyInteger('MqttPort', 1883);
+        $this->RegisterPropertyString('MqttUser', '');
+        $this->RegisterPropertyString('MqttPassword', '');
+        $this->RegisterPropertyString('MqttPortalId', '');
+
         $this->RegisterPropertyInteger('UpdateInterval', 60);
 
-        // Manuelle Code-Overrides (leer = Auto-Erkennung). Mehrere Codes per Komma summieren.
+        // Manuelle Code-Overrides (VRM). Leer = Auto-Erkennung. Mehrere Codes per Komma summieren.
         $this->RegisterPropertyString('CodeSOC', '');
         $this->RegisterPropertyString('CodeBatteryVoltage', '');
         $this->RegisterPropertyString('CodePV', '');
@@ -32,13 +48,23 @@ class VictronVRMEnergyMonitor extends IPSModule
         $this->RegisterPropertyString('CodeConsumption', '');
         $this->RegisterPropertyString('CodeDC', '');
 
-        // Cache der abgerufenen Anlagen für das Formular
+        // Maxima für die Auslastungsbalken (0–100 %)
+        $this->RegisterPropertyInteger('MaxPV', 5000);
+        $this->RegisterPropertyInteger('MaxGrid', 11000);
+        $this->RegisterPropertyInteger('MaxConsumption', 5000);
+        $this->RegisterPropertyInteger('MaxDC', 1000);
+
+        // Zweiter Verbraucher aus einer Symcon-Variable
+        $this->RegisterPropertyBoolean('ExtraEnabled', false);
+        $this->RegisterPropertyString('ExtraName', 'Wärmepumpe');
+        $this->RegisterPropertyInteger('ExtraVariable', 0);
+        $this->RegisterPropertyInteger('ExtraMax', 3000);
+
         $this->RegisterAttributeString('Installations', '[]');
         $this->RegisterAttributeInteger('IdUser', 0);
 
         $this->RegisterTimer('Update', 0, 'VRM_Update($_IPS[\'TARGET\']);');
 
-        // HTML-SDK Tile aktivieren (ab Symcon 7.1)
         $this->SetVisualizationType(1);
 
         $this->registerVariables();
@@ -55,22 +81,51 @@ class VictronVRMEnergyMonitor extends IPSModule
 
         $this->registerVariables();
 
-        $token = trim($this->ReadPropertyString('AccessToken'));
-        $site  = $this->ReadPropertyInteger('IdSite');
+        // Auf Änderungen der Extra-Variable reagieren, damit die Kachel live folgt
+        $this->UnregisterMessages();
+        $extraVar = $this->ReadPropertyInteger('ExtraVariable');
+        if ($this->ReadPropertyBoolean('ExtraEnabled') && $extraVar > 0 && IPS_VariableExists($extraVar)) {
+            $this->RegisterMessage($extraVar, VM_UPDATE);
+        }
 
-        if ($token === '' || $site <= 0) {
-            $this->SetStatus(104); // inaktiv – Konfiguration unvollständig
+        if (!$this->isConfigured()) {
+            $this->SetStatus(104);
             $this->SetTimerInterval('Update', 0);
             return;
         }
 
-        $this->SetStatus(102); // aktiv
+        $this->SetStatus(102);
 
         $interval = $this->ReadPropertyInteger('UpdateInterval');
-        if ($interval < 15) {
-            $interval = 15; // VRM-Cloud aktualisiert nur alle paar Minuten – häufiger ist sinnlos
+        if ($interval < 5) {
+            $interval = 5;
         }
         $this->SetTimerInterval('Update', $interval * 1000);
+    }
+
+    public function MessageSink($timestamp, $senderID, $message, $data)
+    {
+        if ($message === VM_UPDATE) {
+            // Extra-Verbraucher hat sich geändert – Kachel aktualisieren
+            $this->UpdateVisualizationValue(json_encode($this->currentSnapshot()));
+        }
+    }
+
+    private function UnregisterMessages(): void
+    {
+        foreach ($this->GetMessageList() as $senderID => $messages) {
+            foreach ($messages as $msg) {
+                $this->UnregisterMessage($senderID, $msg);
+            }
+        }
+    }
+
+    private function isConfigured(): bool
+    {
+        if ($this->ReadPropertyInteger('DataSource') === self::SOURCE_MQTT) {
+            return trim($this->ReadPropertyString('MqttHost')) !== '';
+        }
+        return trim($this->ReadPropertyString('AccessToken')) !== '' && $this->ReadPropertyInteger('IdSite') > 0;
     }
 
     private function registerVariables(): void
@@ -89,19 +144,18 @@ class VictronVRMEnergyMonitor extends IPSModule
 
     public function Update(): void
     {
-        $site = $this->ReadPropertyInteger('IdSite');
-        if ($site <= 0 || trim($this->ReadPropertyString('AccessToken')) === '') {
+        if (!$this->isConfigured()) {
             return;
         }
 
-        [$httpCode, $data, $err] = $this->apiRequest('/v2/installations/' . $site . '/diagnostics?count=1000');
-        if ($httpCode !== 200 || !is_array($data) || !isset($data['records'])) {
-            $this->SendDebug('Update', 'Fehler beim Abruf: HTTP ' . $httpCode . ' ' . $err, 0);
-            $this->SetStatus(201); // Kommunikationsfehler
+        $m = $this->ReadPropertyInteger('DataSource') === self::SOURCE_MQTT
+            ? $this->fetchFromMqtt()
+            : $this->fetchFromVrm();
+
+        if ($m === null) {
+            $this->SetStatus(201);
             return;
         }
-
-        $m = $this->detectMetrics($data['records']);
 
         if ($m['SOC'] !== null) {
             $this->SetValue('SOC', $m['SOC']);
@@ -126,13 +180,84 @@ class VictronVRMEnergyMonitor extends IPSModule
         $this->UpdateVisualizationValue(json_encode($snapshot));
     }
 
-    /* ===================== Wert-Erkennung ===================== */
+    /* ===================== Datenquelle: VRM ===================== */
 
-    /**
-     * Ermittelt die Systemwerte aus den Diagnostics-Records.
-     * Reihenfolge je Metrik: manueller Override > bekannte Codes > Beschreibungs-Heuristik.
-     * Werte in Watt bzw. Prozent/Volt. Vorzeichen: Netz + = Bezug, Batterie + = Laden.
-     */
+    private function fetchFromVrm(): ?array
+    {
+        $site = $this->ReadPropertyInteger('IdSite');
+        [$httpCode, $data, $err] = $this->apiRequest('/v2/installations/' . $site . '/diagnostics?count=1000');
+        if ($httpCode !== 200 || !is_array($data) || !isset($data['records'])) {
+            $this->SendDebug('fetchFromVrm', 'HTTP ' . $httpCode . ' ' . $err, 0);
+            return null;
+        }
+        return $this->detectMetrics($data['records']);
+    }
+
+    /* ===================== Datenquelle: MQTT ===================== */
+
+    private function fetchFromMqtt(): ?array
+    {
+        try {
+            $client = new VictronMqtt(
+                $this->ReadPropertyString('MqttHost'),
+                $this->ReadPropertyInteger('MqttPort'),
+                $this->ReadPropertyString('MqttUser'),
+                $this->ReadPropertyString('MqttPassword'),
+                trim($this->ReadPropertyString('MqttPortalId'))
+            );
+            $values = $client->fetchSystemValues();
+        } catch (Exception $e) {
+            $this->SendDebug('fetchFromMqtt', $e->getMessage(), 0);
+            return null;
+        }
+
+        if (empty($values)) {
+            $this->SendDebug('fetchFromMqtt', 'Keine Werte empfangen', 0);
+            return null;
+        }
+
+        $get = fn(string $k) => array_key_exists($k, $values) ? (float) $values[$k] : null;
+        $sum = function (array $keys) use ($values) {
+            $t = 0.0;
+            $found = false;
+            foreach ($keys as $k) {
+                if (array_key_exists($k, $values)) {
+                    $t += (float) $values[$k];
+                    $found = true;
+                }
+            }
+            return $found ? $t : null;
+        };
+        $phases = function (array $keys) use ($values) {
+            $out = [];
+            $any = false;
+            foreach ($keys as $k) {
+                $v = array_key_exists($k, $values) ? (float) $values[$k] : null;
+                if ($v !== null) {
+                    $any = true;
+                }
+                $out[] = $v;
+            }
+            return $any ? $out : [];
+        };
+
+        $round = fn($v, $d = 1) => $v === null ? null : round($v, $d);
+
+        return [
+            'SOC'            => $round($get('battery/soc'), 0),
+            'BatteryVoltage' => $round($get('battery/voltage'), 2),
+            'Battery'        => $round($get('battery/power'), 0),
+            'PV'             => $round($sum(['pv/dc', 'pv/ac_l1', 'pv/ac_l2', 'pv/ac_l3']), 0),
+            'Grid'           => $round($sum(['grid/l1', 'grid/l2', 'grid/l3']), 0),
+            'GridPhases'     => $phases(['grid/l1', 'grid/l2', 'grid/l3']),
+            'Consumption'    => $round($sum(['cons/l1', 'cons/l2', 'cons/l3']), 0),
+            'ConsPhases'     => $phases(['cons/l1', 'cons/l2', 'cons/l3']),
+            'DC'             => $round($get('dc/power'), 0),
+        ];
+    }
+
+    /* ===================== Wert-Erkennung (VRM) ===================== */
+
     private function detectMetrics(array $records): array
     {
         $sumCodes = function (array $codes) use ($records) {
@@ -146,7 +271,6 @@ class VictronVRMEnergyMonitor extends IPSModule
             }
             return $found ? $total : null;
         };
-
         $firstByDesc = function (array $needles) use ($records) {
             foreach ($records as $r) {
                 $desc = strtolower((string) ($r['description'] ?? ''));
@@ -158,7 +282,6 @@ class VictronVRMEnergyMonitor extends IPSModule
             }
             return null;
         };
-
         $sumByDesc = function (array $needles) use ($records) {
             $total = 0.0;
             $found = false;
@@ -174,8 +297,6 @@ class VictronVRMEnergyMonitor extends IPSModule
             }
             return $found ? $total : null;
         };
-
-        // Einzelwerte je Code (für Phasen-Punkte)
         $byCode = function (string $code) use ($records) {
             foreach ($records as $r) {
                 if (($r['code'] ?? '') === $code && is_numeric($r['rawValue'] ?? null)) {
@@ -196,7 +317,6 @@ class VictronVRMEnergyMonitor extends IPSModule
             }
             return $any ? $out : [];
         };
-
         $override = function (string $prop) use ($sumCodes) {
             $raw = trim($this->ReadPropertyString($prop));
             if ($raw === '') {
@@ -205,17 +325,11 @@ class VictronVRMEnergyMonitor extends IPSModule
             return $sumCodes(array_map('trim', explode(',', $raw)));
         };
 
-        // SOC (%)
         $soc = $override('CodeSOC') ?? $sumCodes(['SOC']) ?? $firstByDesc(['state of charge']);
-
-        // Batteriespannung (V)
         $bvolt = $override('CodeBatteryVoltage') ?? $byCode('V') ?? $byCode('bv') ?? $firstByDesc(['battery voltage']);
-
-        // PV / Solar (W) – DC- und AC-gekoppelt
         $pv = $override('CodePV') ?? $sumCodes(['Pdc', 'PVP'])
             ?? $sumByDesc(['pv - dc-coupled', 'pv - ac-coupled', 'pv power', 'solar']);
 
-        // Batterieleistung (W); Fallback: U × I
         $battery = $override('CodeBattery') ?? $sumCodes(['bp', 'Pb']) ?? $firstByDesc(['battery power']);
         if ($battery === null) {
             $i = $byCode('I') ?? $byCode('bc') ?? $firstByDesc(['battery current']);
@@ -224,19 +338,15 @@ class VictronVRMEnergyMonitor extends IPSModule
             }
         }
 
-        // Netzleistung (W) – Summe aller Phasen
         $grid = $override('CodeGrid') ?? $sumCodes(['g1', 'g2', 'g3']) ?? $sumByDesc(['grid l', 'grid power']);
         $gridPhases = $phases(['g1', 'g2', 'g3']);
 
-        // AC-Verbrauch (W) – Summe aller Phasen
         $consumption = $override('CodeConsumption') ?? $sumCodes(['o1', 'o2', 'o3'])
             ?? $sumByDesc(['ac consumption', 'ac loads', 'consumption l']);
         $consPhases = $phases(['o1', 'o2', 'o3']);
 
-        // DC-Lasten (W)
         $dc = $override('CodeDC') ?? $sumCodes(['dc_P', 'lo']) ?? $firstByDesc(['dc power', 'dc loads', 'system dc load']);
 
-        // Verbrauch notfalls aus Energiebilanz ableiten: Last = PV + Netz − Batterieladung
         if ($consumption === null && ($pv !== null || $grid !== null || $battery !== null)) {
             $consumption = max(0.0, ($pv ?? 0.0) + ($grid ?? 0.0) - ($battery ?? 0.0));
         }
@@ -260,7 +370,7 @@ class VictronVRMEnergyMonitor extends IPSModule
 
     private function buildSnapshot(array $m, int $ts): array
     {
-        return [
+        return array_merge([
             'soc'         => $m['SOC'],
             'battVoltage' => $m['BatteryVoltage'],
             'battPower'   => $m['Battery'] ?? 0.0,
@@ -271,6 +381,26 @@ class VictronVRMEnergyMonitor extends IPSModule
             'consPhases'  => $m['ConsPhases'] ?? [],
             'dc'          => $m['DC'] ?? 0.0,
             'timestamp'   => $ts,
+        ], $this->displayConfig());
+    }
+
+    private function displayConfig(): array
+    {
+        $extraVar = $this->ReadPropertyInteger('ExtraVariable');
+        $extraEnabled = $this->ReadPropertyBoolean('ExtraEnabled') && $extraVar > 0 && IPS_VariableExists($extraVar);
+        $extraValue = $extraEnabled ? (float) GetValue($extraVar) : 0.0;
+
+        return [
+            'maxPv'          => $this->ReadPropertyInteger('MaxPV'),
+            'maxGrid'        => $this->ReadPropertyInteger('MaxGrid'),
+            'maxConsumption' => $this->ReadPropertyInteger('MaxConsumption'),
+            'maxDc'          => $this->ReadPropertyInteger('MaxDC'),
+            'extra'          => [
+                'enabled' => $extraEnabled,
+                'name'    => $this->ReadPropertyString('ExtraName'),
+                'value'   => $extraValue,
+                'max'     => $this->ReadPropertyInteger('ExtraMax'),
+            ],
         ];
     }
 
@@ -280,11 +410,11 @@ class VictronVRMEnergyMonitor extends IPSModule
         if ($buf !== '') {
             $decoded = json_decode($buf, true);
             if (is_array($decoded)) {
-                return $decoded;
+                // Anzeige-Konfiguration (Maxima/Extra) stets frisch überlagern
+                return array_merge($decoded, $this->displayConfig());
             }
         }
-        // Fallback aus den gespeicherten Variablen (z. B. vor dem ersten Abruf)
-        return [
+        return array_merge([
             'soc'         => $this->getFloatSafe('SOC'),
             'battVoltage' => $this->getFloatSafe('BatteryVoltage'),
             'battPower'   => $this->getFloatSafe('BatteryPower'),
@@ -295,7 +425,7 @@ class VictronVRMEnergyMonitor extends IPSModule
             'consPhases'  => [],
             'dc'          => $this->getFloatSafe('DCPower'),
             'timestamp'   => (int) $this->getFloatSafe('LastUpdate'),
-        ];
+        ], $this->displayConfig());
     }
 
     private function getFloatSafe(string $ident): float
@@ -440,9 +570,6 @@ class VictronVRMEnergyMonitor extends IPSModule
         }
     }
 
-    /**
-     * Listet alle verfügbaren Diagnostics-Codes zur Konfiguration der Overrides.
-     */
     public function ListCodes(): void
     {
         $site = $this->ReadPropertyInteger('IdSite');
@@ -469,6 +596,36 @@ class VictronVRMEnergyMonitor extends IPSModule
         $text = implode("\n", $lines);
         $this->SendDebug('ListCodes', "\n" . $text, 0);
         echo $text;
+    }
+
+    public function TestMqtt(): void
+    {
+        if (trim($this->ReadPropertyString('MqttHost')) === '') {
+            echo $this->Translate('Please enter the MQTT host first.');
+            return;
+        }
+        try {
+            $client = new VictronMqtt(
+                $this->ReadPropertyString('MqttHost'),
+                $this->ReadPropertyInteger('MqttPort'),
+                $this->ReadPropertyString('MqttUser'),
+                $this->ReadPropertyString('MqttPassword'),
+                trim($this->ReadPropertyString('MqttPortalId'))
+            );
+            $values = $client->fetchSystemValues();
+        } catch (Exception $e) {
+            echo $this->Translate('MQTT error') . ': ' . $e->getMessage();
+            return;
+        }
+        if (empty($values)) {
+            echo $this->Translate('Connected, but no values received. Check the portal ID.');
+            return;
+        }
+        $lines = ['Portal-ID: ' . $client->getPortalId(), str_repeat('-', 40)];
+        foreach ($values as $k => $v) {
+            $lines[] = str_pad($k, 16) . $v;
+        }
+        echo implode("\n", $lines);
     }
 
     /* ===================== Visualisierung (HTML-SDK) ===================== */

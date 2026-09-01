@@ -11,7 +11,7 @@
         --grid: #2f6fd0;
         --load: #3f4650;
         --active: #6ab04c;
-        --dot: #2f7ed8;
+        --consumption: #e0663c;
         box-sizing: border-box;
         width: 100%;
         background: var(--bg);
@@ -31,27 +31,26 @@
             --grid: #5a9be0;
             --load: #c7cdd6;
             --active: #6ab04c;
-            --dot: #4a90d9;
+            --consumption: #e0663c;
         }
     }
     .vrm[data-theme="dark"] {
         --bg: #11151c; --track: #24313f; --arc: #2a3a4d; --ring: #4a90d9;
         --text: #e8edf3; --muted: #7c8794; --solar: #f2b134; --grid: #5a9be0;
-        --load: #c7cdd6; --active: #6ab04c; --dot: #4a90d9;
+        --load: #c7cdd6; --active: #6ab04c; --consumption: #e0663c;
     }
     .vrm svg { display: block; width: 100%; height: auto; }
     .vrm .val { fill: var(--text); font-weight: 600; }
     .vrm .unit { fill: var(--muted); font-weight: 500; }
     .vrm .lbl { fill: var(--muted); }
-    .vrm .arc { fill: none; stroke: var(--arc); stroke-width: 5; stroke-linecap: round; }
-    .vrm .arc.on { stroke-width: 6; }
-    .vrm .dot { fill: var(--dot); }
+    .vrm .track { fill: none; stroke: var(--arc); stroke-width: 6; stroke-linecap: round; }
+    .vrm .fill { fill: none; stroke-width: 6; stroke-linecap: round; }
     .vrm .pnum { fill: var(--muted); font-weight: 600; }
 </style>
 
 <div class="vrm" id="vrm">
-    <svg viewBox="0 0 1200 520" preserveAspectRatio="xMidYMid meet" aria-label="Victron Energy">
-        <!-- dynamisch erzeugte Bögen + Flusspunkte -->
+    <svg viewBox="0 0 1200 560" preserveAspectRatio="xMidYMid meet" aria-label="Victron Energy">
+        <!-- dynamisch erzeugte Auslastungsbalken -->
         <g id="vrmArcs"></g>
 
         <!-- SOC-Ring -->
@@ -107,6 +106,12 @@
                 <line x1="0" y1="2" x2="16" y2="2"/><line x1="3" y1="9" x2="13" y2="9" stroke-dasharray="3 3"/>
             </g>
         </g>
+
+        <!-- Zusätzlicher Verbraucher (unten, optional) -->
+        <g id="vrmExtra" transform="translate(600 498)" text-anchor="middle" style="display:none">
+            <text class="lbl" x="0" y="0" font-size="20" id="vrmExtraName">Verbraucher</text>
+            <text x="0" y="32" font-size="34" text-anchor="middle"><tspan class="val" id="vrmExtraVal">–</tspan><tspan class="unit" font-size="24"> W</tspan></text>
+        </g>
     </svg>
 </div>
 
@@ -129,14 +134,15 @@
                    p2[0].toFixed(1) + ' ' + p2[1].toFixed(1);
         }
         function fmt(v) { return String(Math.round(v)); }
+        function clamp01(x) { return x < 0 ? 0 : (x > 1 ? 1 : x); }
 
-        // Bögen sitzen in der Lücke zwischen Werte-Text und Ring.
-        // src = Seite beim Wert, ring = Seite beim Ring.
+        // Auslastungsbalken je Quelle/Last. src = Wertseite, ring = Ringseite.
         var ARCS = {
-            grid:  { r: 205, src: 152, ring: 178 },
-            solar: { r: 205, src: 208, ring: 182 },
-            ac:    { r: 205, src: 28,  ring: 2 },
-            dc:    { r: 205, src: 332, ring: 358 }
+            grid:  { r: 205, src: 140, ring: 178 },
+            solar: { r: 205, src: 220, ring: 182 },
+            ac:    { r: 205, src: 40,  ring: 2 },
+            dc:    { r: 205, src: 320, ring: 358 },
+            extra: { r: 205, src: 250, ring: 290 }
         };
 
         var SVGNS = 'http://www.w3.org/2000/svg';
@@ -146,21 +152,16 @@
             return e;
         }
 
-        function buildFlow(group, def, active, forward, color, speed) {
-            var d = arcD(def.r, def.src, def.ring);
-            var path = el('path', { d: d, class: 'arc' + (active ? ' on' : '') });
-            if (active && color) { path.setAttribute('stroke', color); }
-            group.appendChild(path);
-            if (active) {
-                var dot = el('circle', { r: 6, class: 'dot' });
-                if (color) { dot.setAttribute('fill', color); }
-                var mp = el('animateMotion', {
-                    dur: speed + 's', repeatCount: 'indefinite', path: d,
-                    keyPoints: forward ? '0;1' : '1;0', keyTimes: '0;1', calcMode: 'linear'
-                });
-                dot.appendChild(mp);
-                group.appendChild(dot);
-            }
+        // Zeichnet einen 0–100 %-Auslastungsbalken: Track (hell) + Füllung (farbig).
+        function buildBar(group, def, value, max, color) {
+            group.appendChild(el('path', { d: arcD(def.r, def.src, def.ring), class: 'track' }));
+            var v = Math.abs(value || 0);
+            if (v <= THR) { return; }
+            var pct = max > 0 ? clamp01(v / max) : 1; // ohne Maximum: voll, wenn aktiv
+            var end = def.src + (def.ring - def.src) * pct;
+            var fill = el('path', { d: arcD(def.r, def.src, end), class: 'fill' });
+            fill.setAttribute('stroke', color);
+            group.appendChild(fill);
         }
 
         function phaseDots(group, phases, activeColor) {
@@ -177,14 +178,6 @@
                 t.textContent = String(i + 1);
                 group.appendChild(t);
             }
-        }
-
-        function speedFor(w) {
-            var a = Math.abs(w);
-            if (a > 3000) return 0.9;
-            if (a > 1000) return 1.4;
-            if (a > 300) return 2.0;
-            return 2.8;
         }
 
         function render(d) {
@@ -205,18 +198,29 @@
             document.getElementById('vrmSolarVal').textContent = fmt(pv);
             document.getElementById('vrmAcVal').textContent = fmt(ac);
             document.getElementById('vrmDcVal').textContent = fmt(dc);
-
             document.getElementById('vrmGridArrow').style.opacity = Math.abs(grid) > THR ? '1' : '0';
 
             phaseDots(document.getElementById('vrmGridPhases'), d.gridPhases, 'var(--active)');
             phaseDots(document.getElementById('vrmAcPhases'), d.consPhases, 'var(--ring)');
 
+            // Zusätzlicher Verbraucher (optional)
+            var extra = d.extra && d.extra.enabled ? d.extra : null;
+            var extraGroup = document.getElementById('vrmExtra');
+            if (extra) {
+                extraGroup.style.display = '';
+                document.getElementById('vrmExtraName').textContent = extra.name || 'Verbraucher';
+                document.getElementById('vrmExtraVal').textContent = fmt(extra.value || 0);
+            } else {
+                extraGroup.style.display = 'none';
+            }
+
             var arcs = document.getElementById('vrmArcs');
             while (arcs.firstChild) { arcs.removeChild(arcs.firstChild); }
-            buildFlow(arcs, ARCS.solar, pv > THR, true, 'var(--solar)', speedFor(pv));
-            buildFlow(arcs, ARCS.grid, Math.abs(grid) > THR, grid > 0, 'var(--ring)', speedFor(grid));
-            buildFlow(arcs, ARCS.ac, ac > THR, false, 'var(--ring)', speedFor(ac));
-            buildFlow(arcs, ARCS.dc, dc > THR, false, 'var(--ring)', speedFor(dc));
+            buildBar(arcs, ARCS.solar, pv, d.maxPv, 'var(--solar)');
+            buildBar(arcs, ARCS.grid, grid, d.maxGrid, 'var(--ring)');
+            buildBar(arcs, ARCS.ac, ac, d.maxConsumption, 'var(--ring)');
+            buildBar(arcs, ARCS.dc, dc, d.maxDc, 'var(--ring)');
+            if (extra) { buildBar(arcs, ARCS.extra, extra.value, extra.max, 'var(--consumption)'); }
         }
 
         window.handleMessage = function (data) {

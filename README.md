@@ -1,18 +1,20 @@
 # Victron VRM Energiemonitor für IP-Symcon
 
-Integriert die Live-Werte deiner Victron-Anlage aus dem **VRM-Portal (Cloud-API)**
-in IP-Symcon und stellt sie als Variablen sowie als **GUIv2-artige Energiefluss-Kachel**
-für die Tile-Visualisierung bereit.
+Integriert die Live-Werte deiner Victron-Anlage in IP-Symcon – wahlweise aus dem
+**VRM-Portal (Cloud-API)** oder per **lokalem MQTT** (Cerbo GX / Venus OS) – und
+stellt sie als Variablen sowie als **GUIv2-artige Energiefluss-Kachel** für die
+Tile-Visualisierung bereit.
 
 Angezeigt werden:
 
 - ☀️ **Solarleistung** (PV, DC- und AC-gekoppelt)
-- 🔋 **Batterie** – Ladezustand (SOC) und Lade-/Entladeleistung
+- 🔋 **Batterie** – Ladezustand (SOC), Spannung und Lade-/Entladeleistung
 - 🏭 **Netz** – Bezug und Einspeisung
-- 🏠 **Verbrauch** – Hauslasten
+- 🏠 **Verbrauch** – AC-Lasten und DC-Lasten
+- 🔌 **Zweiter Verbraucher** (optional) – z. B. Wärmepumpe aus einer beliebigen Symcon-Variable
 
-Die Kachel ist der Victron-**GUIv2**-Ansicht nachempfunden und unterstützt
-Light- und Dark-Mode.
+Die Kachel ist der Victron-**GUIv2**-Ansicht nachempfunden: Batterie-SOC-Ring in der
+Mitte, **0–100 %-Auslastungsbalken** je Quelle/Last und Light- & Dark-Mode.
 
 | Light | Dark |
 |-------|------|
@@ -31,7 +33,32 @@ Light- und Dark-Mode.
    `https://github.com/teesmokr/symcon-vrm-integration`
 2. Anschließend eine neue Instanz vom Typ **„Victron VRM Energiemonitor"** anlegen.
 
-## Einrichtung
+## Datenquelle: VRM Cloud oder MQTT
+
+Im Formular oben wählst du die **Datenquelle**:
+
+- **VRM Cloud** (Standard): einfach, ohne lokalen Netzzugriff, aber die Cloud
+  aktualisiert nur alle paar Minuten.
+- **MQTT (lokal) – Beta**: nahezu Echtzeit über den Broker auf dem Cerbo GX /
+  Venus OS. Aktiviere dort **Einstellungen → Dienste → MQTT**. Trage Host/IP
+  (Port 1883) ein; Benutzer/Passwort nur falls gesetzt; die Portal-ID wird
+  automatisch erkannt. Mit **„MQTT-Verbindung testen"** prüfst du die Anbindung.
+  > ⚠️ MQTT ist als Beta gekennzeichnet und wurde noch nicht gegen einen echten
+  > Broker getestet – Rückmeldungen willkommen.
+
+## Auslastungsbalken
+
+Die Bögen um den Ring sind **0–100 %-Auslastungsbalken**. Unter
+**„Anzeige / Auslastungsbalken"** gibst du je Quelle/Last die Nennleistung (W)
+an, die 100 % entspricht (z. B. Solar 5000 W, Netz 11000 W).
+
+## Zweiter Verbraucher (z. B. Wärmepumpe)
+
+Unter **„Zweiter Verbraucher"** kann eine beliebige Symcon-Variable (Leistung in W)
+als zusätzlicher Verbraucher unten in der Kachel eingeblendet werden – mit
+eigenem Namen und Auslastungsbalken. Die Kachel folgt Änderungen der Variable live.
+
+## Einrichtung (VRM Cloud)
 
 ### 1. VRM-Zugangstoken erstellen
 
@@ -99,7 +126,8 @@ Ereignissen weiterverwenden.
 |--------------------------------|-------------------------------------------------|
 | `VRM_Update(int $InstanzID)`   | Ruft die aktuellen Werte sofort aus dem VRM-Portal ab. |
 | `VRM_LoadInstallations(int $InstanzID)` | Lädt die Anlagen des Kontos (für das Formular). |
-| `VRM_ListCodes(int $InstanzID)`| Listet alle verfügbaren Diagnostics-Codes auf.  |
+| `VRM_ListCodes(int $InstanzID)`| Listet alle verfügbaren Diagnostics-Codes auf (VRM). |
+| `VRM_TestMqtt(int $InstanzID)` | Testet die MQTT-Verbindung und zeigt die empfangenen Werte. |
 
 ## Hinweise zum Datenschutz
 
