@@ -54,6 +54,17 @@ class VictronVRMEnergyMonitor extends IPSModule
         $this->RegisterPropertyInteger('MaxConsumption', 5000);
         $this->RegisterPropertyInteger('MaxDC', 1000);
 
+        // Sichtbarkeit der Werte/Knoten
+        $this->RegisterPropertyBoolean('ShowGrid', true);
+        $this->RegisterPropertyBoolean('ShowSolar', true);
+        $this->RegisterPropertyBoolean('ShowConsumption', true);
+        $this->RegisterPropertyBoolean('ShowDC', true);
+
+        // Einzelne Solar-Phasen ausblenden
+        $this->RegisterPropertyBoolean('ShowSolarL1', true);
+        $this->RegisterPropertyBoolean('ShowSolarL2', true);
+        $this->RegisterPropertyBoolean('ShowSolarL3', true);
+
         // Zweiter Verbraucher aus einer Symcon-Variable
         $this->RegisterPropertyBoolean('ExtraEnabled', false);
         $this->RegisterPropertyString('ExtraName', 'Wärmepumpe');
@@ -97,8 +108,8 @@ class VictronVRMEnergyMonitor extends IPSModule
         $this->SetStatus(102);
 
         $interval = $this->ReadPropertyInteger('UpdateInterval');
-        if ($interval < 5) {
-            $interval = 5;
+        if ($interval < 1) {
+            $interval = 1;
         }
         $this->SetTimerInterval('Update', $interval * 1000);
     }
@@ -248,6 +259,7 @@ class VictronVRMEnergyMonitor extends IPSModule
             'BatteryVoltage' => $round($get('battery/voltage'), 2),
             'Battery'        => $round($get('battery/power'), 0),
             'PV'             => $round($sum(['pv/dc', 'pv/ac_l1', 'pv/ac_l2', 'pv/ac_l3']), 0),
+            'SolarPhases'    => $phases(['pv/ac_l1', 'pv/ac_l2', 'pv/ac_l3']),
             'Grid'           => $round($sum(['grid/l1', 'grid/l2', 'grid/l3']), 0),
             'GridPhases'     => $phases(['grid/l1', 'grid/l2', 'grid/l3']),
             'Consumption'    => $round($sum(['cons/l1', 'cons/l2', 'cons/l3']), 0),
@@ -358,6 +370,7 @@ class VictronVRMEnergyMonitor extends IPSModule
             'BatteryVoltage' => $round($bvolt, 2),
             'Battery'        => $round($battery, 0),
             'PV'             => $round($pv, 0),
+            'SolarPhases'    => [],
             'Grid'           => $round($grid, 0),
             'GridPhases'     => $gridPhases,
             'Consumption'    => $round($consumption, 0),
@@ -375,6 +388,7 @@ class VictronVRMEnergyMonitor extends IPSModule
             'battVoltage' => $m['BatteryVoltage'],
             'battPower'   => $m['Battery'] ?? 0.0,
             'pv'          => $m['PV'] ?? 0.0,
+            'solarPhases' => $m['SolarPhases'] ?? [],
             'grid'        => $m['Grid'] ?? 0.0,
             'gridPhases'  => $m['GridPhases'] ?? [],
             'consumption' => $m['Consumption'] ?? 0.0,
@@ -395,6 +409,17 @@ class VictronVRMEnergyMonitor extends IPSModule
             'maxGrid'        => $this->ReadPropertyInteger('MaxGrid'),
             'maxConsumption' => $this->ReadPropertyInteger('MaxConsumption'),
             'maxDc'          => $this->ReadPropertyInteger('MaxDC'),
+            'show'           => [
+                'grid'        => $this->ReadPropertyBoolean('ShowGrid'),
+                'solar'       => $this->ReadPropertyBoolean('ShowSolar'),
+                'consumption' => $this->ReadPropertyBoolean('ShowConsumption'),
+                'dc'          => $this->ReadPropertyBoolean('ShowDC'),
+                'solarPhases' => [
+                    $this->ReadPropertyBoolean('ShowSolarL1'),
+                    $this->ReadPropertyBoolean('ShowSolarL2'),
+                    $this->ReadPropertyBoolean('ShowSolarL3'),
+                ],
+            ],
             'extra'          => [
                 'enabled' => $extraEnabled,
                 'name'    => $this->ReadPropertyString('ExtraName'),

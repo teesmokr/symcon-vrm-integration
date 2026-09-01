@@ -164,6 +164,25 @@
             group.appendChild(fill);
         }
 
+        function hasValues(arr) {
+            return arr && arr.some(function (p) { return p !== null && p !== undefined; });
+        }
+
+        // Zeichnet je Phase einen kleinen Balken (konzentrisch); ohne Phasendaten einen Gesamt-Balken.
+        function drawSource(group, def, total, phases, maxTotal, color, showMask) {
+            if (hasValues(phases)) {
+                var radii = [def.r, def.r - 10, def.r - 20];
+                var pmax = maxTotal > 0 ? maxTotal / 3 : 0;
+                for (var i = 0; i < 3; i++) {
+                    if (phases[i] === null || phases[i] === undefined) { continue; }
+                    if (showMask && showMask[i] === false) { continue; }
+                    buildBar(group, { r: radii[i], src: def.src, ring: def.ring }, phases[i], pmax, color);
+                }
+            } else {
+                buildBar(group, def, total, maxTotal, color);
+            }
+        }
+
         function phaseDots(group, phases, activeColor) {
             while (group.firstChild) { group.removeChild(group.firstChild); }
             for (var i = 0; i < 3; i++) {
@@ -203,6 +222,20 @@
             phaseDots(document.getElementById('vrmGridPhases'), d.gridPhases, 'var(--active)');
             phaseDots(document.getElementById('vrmAcPhases'), d.consPhases, 'var(--ring)');
 
+            // Sichtbarkeit der Knoten
+            var show = d.show || {};
+            var vis = function (id, on) {
+                var g = document.getElementById(id);
+                if (g) { g.style.display = (on === false) ? 'none' : ''; }
+            };
+            var showGrid = show.grid !== false, showSolar = show.solar !== false;
+            var showCons = show.consumption !== false, showDc = show.dc !== false;
+            vis('vrmGrid', showGrid);
+            vis('vrmSolar', showSolar);
+            vis('vrmAc', showCons);
+            vis('vrmDc', showDc);
+            var solarMask = show.solarPhases || null;
+
             // Zusätzlicher Verbraucher (optional)
             var extra = d.extra && d.extra.enabled ? d.extra : null;
             var extraGroup = document.getElementById('vrmExtra');
@@ -216,10 +249,10 @@
 
             var arcs = document.getElementById('vrmArcs');
             while (arcs.firstChild) { arcs.removeChild(arcs.firstChild); }
-            buildBar(arcs, ARCS.solar, pv, d.maxPv, 'var(--solar)');
-            buildBar(arcs, ARCS.grid, grid, d.maxGrid, 'var(--ring)');
-            buildBar(arcs, ARCS.ac, ac, d.maxConsumption, 'var(--ring)');
-            buildBar(arcs, ARCS.dc, dc, d.maxDc, 'var(--ring)');
+            if (showSolar) { drawSource(arcs, ARCS.solar, pv, d.solarPhases, d.maxPv, 'var(--solar)', solarMask); }
+            if (showGrid) { drawSource(arcs, ARCS.grid, grid, d.gridPhases, d.maxGrid, 'var(--ring)', null); }
+            if (showCons) { drawSource(arcs, ARCS.ac, ac, d.consPhases, d.maxConsumption, 'var(--ring)', null); }
+            if (showDc) { buildBar(arcs, ARCS.dc, dc, d.maxDc, 'var(--ring)'); }
             if (extra) { buildBar(arcs, ARCS.extra, extra.value, extra.max, 'var(--consumption)'); }
         }
 

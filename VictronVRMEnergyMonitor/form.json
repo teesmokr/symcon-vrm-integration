@@ -10,7 +10,7 @@
                     "value": 0
                 },
                 {
-                    "caption": "MQTT (local, Cerbo/Venus) – beta",
+                    "caption": "MQTT (local, Cerbo/Venus)",
                     "value": 1
                 }
             ]
@@ -54,12 +54,12 @@
         },
         {
             "type": "ExpansionPanel",
-            "caption": "MQTT (local) – beta",
+            "caption": "MQTT (local)",
             "expanded": false,
             "items": [
                 {
                     "type": "Label",
-                    "caption": "For 'MQTT': enable MQTT on the Cerbo GX / Venus OS (Settings → Services → MQTT). The module polls the local broker on each update. Note: MQTT support is beta and has not been tested against a live broker yet – please report back."
+                    "caption": "For 'MQTT': enable MQTT on the Cerbo GX / Venus OS (Settings → Services → MQTT). The module polls the local broker on each update."
                 },
                 {
                     "type": "ValidationTextBox",
@@ -105,12 +105,12 @@
                     "name": "UpdateInterval",
                     "caption": "Update interval",
                     "suffix": "seconds",
-                    "minimum": 5,
+                    "minimum": 1,
                     "maximum": 3600
                 },
                 {
                     "type": "Label",
-                    "caption": "Note: The VRM cloud updates the stored values only every few minutes. MQTT is near real-time, so a short interval (e.g. 5–10 s) makes sense there."
+                    "caption": "Note: The VRM cloud updates the stored values only every few minutes. MQTT is near real-time, so a short interval (down to 1 s) makes sense there."
                 }
             ]
         },
@@ -146,6 +146,61 @@
                     "name": "MaxDC",
                     "caption": "DC loads 100 % at (W)",
                     "minimum": 0
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Visibility",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Show or hide individual values in the tile."
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowGrid",
+                    "caption": "Show grid"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowSolar",
+                    "caption": "Show solar"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowConsumption",
+                    "caption": "Show AC consumption"
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ShowDC",
+                    "caption": "Show DC loads"
+                },
+                {
+                    "type": "Label",
+                    "caption": "Solar phases (for AC-coupled PV via MQTT):"
+                },
+                {
+                    "type": "RowLayout",
+                    "items": [
+                        {
+                            "type": "CheckBox",
+                            "name": "ShowSolarL1",
+                            "caption": "L1"
+                        },
+                        {
+                            "type": "CheckBox",
+                            "name": "ShowSolarL2",
+                            "caption": "L2"
+                        },
+                        {
+                            "type": "CheckBox",
+                            "name": "ShowSolarL3",
+                            "caption": "L3"
+                        }
+                    ]
                 }
             ]
         },
