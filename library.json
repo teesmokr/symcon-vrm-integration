@@ -1,0 +1,12 @@
+{
+    "id": "{FB46E384-D996-4975-AD4E-46EE98154A33}",
+    "name": "Victron VRM",
+    "author": "Jörg Grave",
+    "url": "https://github.com/teesmokr/symcon-vrm-integration",
+    "compatibility": {
+        "version": "7.1"
+    },
+    "version": "1.0",
+    "build": 1,
+    "date": 1756684800
+}

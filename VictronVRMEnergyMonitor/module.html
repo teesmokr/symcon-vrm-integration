@@ -1,0 +1,230 @@
+<!-- Victron VRM Energiemonitor – GUIv2-artige Energiefluss-Kachel -->
+<style>
+    .vrm-wrap {
+        --vrm-bg: #10141b;
+        --vrm-card: #1b212b;
+        --vrm-line: #39424f;
+        --vrm-text: #e7ecf2;
+        --vrm-muted: #8a94a3;
+        --vrm-solar: #f2b134;
+        --vrm-grid: #4a90d9;
+        --vrm-battery: #4caf7d;
+        --vrm-consumption: #e0663c;
+        box-sizing: border-box;
+        width: 100%;
+        background: var(--vrm-bg);
+        color: var(--vrm-text);
+        border-radius: 12px;
+        padding: 16px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .vrm-wrap *, .vrm-wrap *::before, .vrm-wrap *::after { box-sizing: border-box; }
+
+    .vrm-diagram {
+        position: relative;
+        width: 100%;
+        max-width: 460px;
+        margin: 0 auto;
+        aspect-ratio: 1 / 1;
+    }
+    .vrm-diagram svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+    .vrm-node {
+        position: absolute;
+        width: 30%;
+        transform: translate(-50%, -50%);
+        background: var(--vrm-card);
+        border: 1px solid var(--vrm-line);
+        border-radius: 12px;
+        padding: 8px 6px;
+        text-align: center;
+    }
+    .vrm-node.top    { left: 50%; top: 13%; }
+    .vrm-node.right  { left: 87%; top: 50%; }
+    .vrm-node.bottom { left: 50%; top: 87%; }
+    .vrm-node.left   { left: 13%; top: 50%; }
+
+    .vrm-node .ico { width: 26px; height: 26px; display: block; margin: 0 auto 4px; }
+    .vrm-node .lbl { font-size: 11px; color: var(--vrm-muted); line-height: 1.1; }
+    .vrm-node .val { font-size: 15px; font-weight: 600; margin-top: 2px; white-space: nowrap; }
+    .vrm-node.dim  { opacity: 0.45; }
+
+    .vrm-hub {
+        position: absolute;
+        left: 50%; top: 50%;
+        transform: translate(-50%, -50%);
+        width: 24%;
+        aspect-ratio: 1 / 1;
+        border-radius: 50%;
+        background: radial-gradient(circle at 50% 40%, #232b37, #161b23);
+        border: 1px solid var(--vrm-line);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
+    .vrm-hub .soc-val { font-size: 20px; font-weight: 700; }
+    .vrm-hub .soc-lbl { font-size: 10px; color: var(--vrm-muted); }
+
+    .vrm-flow { fill: none; stroke: var(--vrm-line); stroke-width: 3; }
+    .vrm-flow.active { stroke-dasharray: 6 10; animation: vrm-dash 1s linear infinite; }
+    .vrm-flow.reverse.active { animation-direction: reverse; }
+    @keyframes vrm-dash { to { stroke-dashoffset: -32; } }
+
+    .vrm-foot {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-top: 12px; font-size: 11px; color: var(--vrm-muted);
+    }
+    .vrm-refresh {
+        background: var(--vrm-card); color: var(--vrm-text);
+        border: 1px solid var(--vrm-line); border-radius: 8px;
+        padding: 4px 10px; cursor: pointer; font-size: 11px;
+    }
+    .vrm-refresh:hover { border-color: var(--vrm-grid); }
+</style>
+
+<div class="vrm-wrap" id="vrmWrap">
+    <div class="vrm-diagram">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+            <!-- Solar (oben) <-> Hub -->
+            <path id="vrmFlowPV" class="vrm-flow" d="M50 20 L50 42"></path>
+            <!-- Netz (links) <-> Hub -->
+            <path id="vrmFlowGrid" class="vrm-flow" d="M20 50 L42 50"></path>
+            <!-- Verbrauch (rechts) <-> Hub -->
+            <path id="vrmFlowCons" class="vrm-flow" d="M58 50 L80 50"></path>
+            <!-- Batterie (unten) <-> Hub -->
+            <path id="vrmFlowBatt" class="vrm-flow" d="M50 58 L50 80"></path>
+        </svg>
+
+        <div class="vrm-node top" id="vrmNodePV">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--vrm-solar)" stroke-width="2" stroke-linecap="round">
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path>
+            </svg>
+            <div class="lbl" data-i18n="Solar">Solar</div>
+            <div class="val" id="vrmValPV">– W</div>
+        </div>
+
+        <div class="vrm-node left" id="vrmNodeGrid">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--vrm-grid)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M8 2h8l-1 6H9L8 2zM9 8l-3 14M15 8l3 14M7 14h10M6 22h4M14 22h4"></path>
+            </svg>
+            <div class="lbl" data-i18n="Grid">Netz</div>
+            <div class="val" id="vrmValGrid">– W</div>
+        </div>
+
+        <div class="vrm-node right" id="vrmNodeCons">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--vrm-consumption)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 11l9-7 9 7M5 10v10h14V10"></path>
+            </svg>
+            <div class="lbl" data-i18n="Consumption">Verbrauch</div>
+            <div class="val" id="vrmValCons">– W</div>
+        </div>
+
+        <div class="vrm-node bottom" id="vrmNodeBatt">
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="var(--vrm-battery)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="7" width="16" height="12" rx="2"></rect>
+                <path d="M9 4h6M8 15h8"></path>
+            </svg>
+            <div class="lbl" data-i18n="Battery">Batterie</div>
+            <div class="val" id="vrmValBatt">– W</div>
+        </div>
+
+        <div class="vrm-hub">
+            <div class="soc-val" id="vrmSoc">–%</div>
+            <div class="soc-lbl" data-i18n="Battery">Batterie</div>
+        </div>
+    </div>
+
+    <div class="vrm-foot">
+        <span id="vrmTime">–</span>
+        <button class="vrm-refresh" id="vrmRefresh" data-i18n="Update now">Jetzt aktualisieren</button>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var initial = /*__INITIAL_DATA__*/null;
+
+        function fmtW(v) {
+            var a = Math.abs(v);
+            if (a >= 1000) return (v / 1000).toFixed(2).replace('.', ',') + ' kW';
+            return Math.round(v) + ' W';
+        }
+
+        function setFlow(id, on, reverse) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            el.classList.toggle('active', !!on);
+            el.classList.toggle('reverse', !!reverse);
+        }
+
+        function setNodeDim(id, dim) {
+            var el = document.getElementById(id);
+            if (el) el.classList.toggle('dim', !!dim);
+        }
+
+        function render(d) {
+            if (!d) return;
+            var pv = d.pv || 0, grid = d.grid || 0, batt = d.battery || 0, cons = d.consumption || 0;
+            var soc = (d.soc === null || d.soc === undefined) ? null : d.soc;
+
+            document.getElementById('vrmValPV').textContent = fmtW(pv);
+            document.getElementById('vrmValGrid').textContent = fmtW(grid);
+            document.getElementById('vrmValCons').textContent = fmtW(cons);
+            document.getElementById('vrmValBatt').textContent = fmtW(batt);
+            document.getElementById('vrmSoc').textContent = (soc === null) ? '–%' : Math.round(soc) + '%';
+
+            var thr = 5; // W – Rauschschwelle
+            // PV: immer Erzeuger -> zum Hub
+            setFlow('vrmFlowPV', pv > thr, false);
+            setNodeDim('vrmNodePV', pv <= thr);
+            // Netz: + = Bezug (Netz -> Hub), - = Einspeisung (Hub -> Netz)
+            setFlow('vrmFlowGrid', Math.abs(grid) > thr, grid < 0);
+            setNodeDim('vrmNodeGrid', Math.abs(grid) <= thr);
+            // Verbrauch: Hub -> Verbrauch (Pfad ist Hub->rechts, also normal)
+            setFlow('vrmFlowCons', cons > thr, false);
+            setNodeDim('vrmNodeCons', cons <= thr);
+            // Batterie: + = Laden (Hub -> Batterie, Pfad Hub->unten normal), - = Entladen (Batterie -> Hub, reverse)
+            setFlow('vrmFlowBatt', Math.abs(batt) > thr, batt < 0);
+            setNodeDim('vrmNodeBatt', Math.abs(batt) <= thr);
+
+            if (d.timestamp) {
+                var dt = new Date(d.timestamp * 1000);
+                document.getElementById('vrmTime').textContent = dt.toLocaleString();
+            }
+        }
+
+        // Von Symcon aufgerufen, wenn UpdateVisualizationValue() Daten sendet
+        window.handleMessage = function (data) {
+            try {
+                var d = (typeof data === 'string') ? JSON.parse(data) : data;
+                render(d);
+            } catch (e) { /* ignore */ }
+        };
+
+        var btn = document.getElementById('vrmRefresh');
+        if (btn) {
+            btn.addEventListener('click', function () {
+                if (typeof requestAction === 'function') {
+                    requestAction('UpdateNow', true);
+                }
+            });
+        }
+
+        // Übersetzungen anwenden, falls Symcon translate() bereitstellt
+        if (typeof translate === 'function') {
+            document.querySelectorAll('#vrmWrap [data-i18n]').forEach(function (el) {
+                el.textContent = translate(el.getAttribute('data-i18n'));
+            });
+        }
+
+        render(initial);
+
+        // Aktuelle Werte aus dem Modul nachladen
+        if (typeof requestAction === 'function') {
+            requestAction('RefreshTile', true);
+        }
+    })();
+</script>

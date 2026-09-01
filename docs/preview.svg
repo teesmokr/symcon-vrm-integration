@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="460" height="460" viewBox="0 0 460 460" font-family="-apple-system, Segoe UI, Roboto, sans-serif">
+    <rect width="460" height="460" rx="16" fill="#10141b"/>
+    <!-- flow lines -->
+    <g stroke-width="4" fill="none">
+        <line x1="230" y1="120" x2="230" y2="190" stroke="#f2b134" stroke-dasharray="6 10"/>
+        <line x1="120" y1="230" x2="190" y2="230" stroke="#4a90d9" stroke-dasharray="6 10"/>
+        <line x1="270" y1="230" x2="340" y2="230" stroke="#e0663c" stroke-dasharray="6 10"/>
+        <line x1="230" y1="270" x2="230" y2="340" stroke="#4caf7d" stroke-dasharray="6 10"/>
+    </g>
+    <!-- hub -->
+    <circle cx="230" cy="230" r="46" fill="#1b212b" stroke="#39424f"/>
+    <text x="230" y="228" fill="#e7ecf2" font-size="22" font-weight="700" text-anchor="middle">78%</text>
+    <text x="230" y="246" fill="#8a94a3" font-size="11" text-anchor="middle">Batterie</text>
+    <!-- nodes -->
+    <g text-anchor="middle">
+        <rect x="175" y="40" width="110" height="80" rx="12" fill="#1b212b" stroke="#39424f"/>
+        <text x="230" y="78" fill="#f2b134" font-size="22">☀</text>
+        <text x="230" y="96" fill="#8a94a3" font-size="11">Solar</text>
+        <text x="230" y="112" fill="#e7ecf2" font-size="15" font-weight="600">3,42 kW</text>
+
+        <rect x="20" y="190" width="110" height="80" rx="12" fill="#1b212b" stroke="#39424f"/>
+        <text x="75" y="228" fill="#4a90d9" font-size="20">▮</text>
+        <text x="75" y="246" fill="#8a94a3" font-size="11">Netz</text>
+        <text x="75" y="262" fill="#e7ecf2" font-size="15" font-weight="600">-820 W</text>
+
+        <rect x="330" y="190" width="110" height="80" rx="12" fill="#1b212b" stroke="#39424f"/>
+        <text x="385" y="228" fill="#e0663c" font-size="20">⌂</text>
+        <text x="385" y="246" fill="#8a94a3" font-size="11">Verbrauch</text>
+        <text x="385" y="262" fill="#e7ecf2" font-size="15" font-weight="600">1,15 kW</text>
+
+        <rect x="175" y="340" width="110" height="80" rx="12" fill="#1b212b" stroke="#39424f"/>
+        <text x="230" y="378" fill="#4caf7d" font-size="20">▭</text>
+        <text x="230" y="396" fill="#8a94a3" font-size="11">Batterie</text>
+        <text x="230" y="412" fill="#e7ecf2" font-size="15" font-weight="600">1,45 kW</text>
+    </g>
+</svg>

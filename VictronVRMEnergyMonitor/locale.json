@@ -1,0 +1,41 @@
+{
+    "translations": {
+        "de": {
+            "VRM access": "VRM-Zugang",
+            "Create a personal access token in the VRM portal under: Preferences → Integrations → Access tokens.": "Erstelle im VRM-Portal ein persönliches Zugangstoken unter: Einstellungen → Integrationen → Zugangstoken.",
+            "Access token": "Zugangstoken",
+            "Load installations": "Anlagen abrufen",
+            "Installation": "Anlage",
+            "Please load installations": "Bitte Anlagen abrufen",
+            "Please select": "Bitte auswählen",
+            "Update": "Aktualisierung",
+            "Update interval": "Aktualisierungsintervall",
+            "seconds": "Sekunden",
+            "Note: The VRM cloud updates the stored values only every few minutes, so a very short interval does not give faster data.": "Hinweis: Die VRM-Cloud aktualisiert die gespeicherten Werte nur alle paar Minuten – ein sehr kurzes Intervall liefert daher keine schnelleren Daten.",
+            "Value mapping (advanced)": "Wertezuordnung (erweitert)",
+            "The values are detected automatically. If a value stays 0 or is wrong, use 'List available codes', find the correct code(s) and enter them below. Multiple codes are summed (comma separated), e.g. per phase.": "Die Werte werden automatisch erkannt. Falls ein Wert 0 bleibt oder falsch ist, nutze 'Verfügbare Codes auflisten', suche den/die richtigen Code(s) und trage sie unten ein. Mehrere Codes werden summiert (kommagetrennt), z. B. je Phase.",
+            "List available codes": "Verfügbare Codes auflisten",
+            "Code battery charge (SOC)": "Code Batterieladung (SOC)",
+            "Code(s) solar power": "Code(s) Solarleistung",
+            "Code(s) battery power": "Code(s) Batterieleistung",
+            "Code(s) grid power": "Code(s) Netzleistung",
+            "Code(s) consumption": "Code(s) Verbrauch",
+            "Update now": "Jetzt aktualisieren",
+            "Active": "Aktiv",
+            "Inactive – please enter access token and select an installation": "Inaktiv – bitte Zugangstoken eingeben und Anlage auswählen",
+            "Communication error with the VRM API": "Kommunikationsfehler mit der VRM-API",
+            "Battery charge": "Batterieladung",
+            "Solar power": "Solarleistung",
+            "Battery power": "Batterieleistung",
+            "Grid power": "Netzleistung",
+            "Consumption": "Verbrauch",
+            "Last update": "Letzte Aktualisierung",
+            "Please enter an access token first": "Bitte zuerst ein Zugangstoken eingeben",
+            "Could not authenticate. Please check the access token.": "Authentifizierung fehlgeschlagen. Bitte Zugangstoken prüfen.",
+            "Could not load installations.": "Anlagen konnten nicht geladen werden.",
+            "No installations found for this account.": "Für dieses Konto wurden keine Anlagen gefunden.",
+            "Please select an installation first.": "Bitte zuerst eine Anlage auswählen.",
+            "Could not load diagnostics.": "Diagnosedaten konnten nicht geladen werden."
+        }
+    }
+}
