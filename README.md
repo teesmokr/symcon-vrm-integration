@@ -39,18 +39,28 @@ Im Formular oben wählst du die **Datenquelle**:
 
 - **VRM Cloud** (Standard): einfach, ohne lokalen Netzzugriff, aber die Cloud
   aktualisiert nur alle paar Minuten.
-- **MQTT (lokal) – Beta**: nahezu Echtzeit über den Broker auf dem Cerbo GX /
+- **MQTT (lokal)**: nahezu Echtzeit über den Broker auf dem Cerbo GX /
   Venus OS. Aktiviere dort **Einstellungen → Dienste → MQTT**. Trage Host/IP
   (Port 1883) ein; Benutzer/Passwort nur falls gesetzt; die Portal-ID wird
   automatisch erkannt. Mit **„MQTT-Verbindung testen"** prüfst du die Anbindung.
-  > ⚠️ MQTT ist als Beta gekennzeichnet und wurde noch nicht gegen einen echten
-  > Broker getestet – Rückmeldungen willkommen.
+  Das Aktualisierungsintervall lässt sich für MQTT bis auf **1 Sekunde** stellen.
 
 ## Auslastungsbalken
 
-Die Bögen um den Ring sind **0–100 %-Auslastungsbalken**. Unter
-**„Anzeige / Auslastungsbalken"** gibst du je Quelle/Last die Nennleistung (W)
-an, die 100 % entspricht (z. B. Solar 5000 W, Netz 11000 W).
+Die Bögen um den Ring sind **0–100 %-Auslastungsbalken**. Bei Netz, AC-Verbrauch
+und Solar wird **je Phase ein eigener Balken** angezeigt (drei konzentrische
+Bögen); die große Zahl ist der jeweilige Gesamtwert. Liegen keine Phasendaten vor,
+wird ein einzelner Gesamt-Balken gezeigt.
+
+Unter **„Anzeige / Auslastungsbalken"** gibst du je Quelle/Last die Nennleistung (W)
+an, die 100 % entspricht (z. B. Solar 5000 W, Netz 11000 W); je Phasenbalken gilt
+ein Drittel davon.
+
+## Sichtbarkeit
+
+Unter **„Sichtbarkeit"** lassen sich einzelne Werte aus- und einblenden
+(z. B. DC-Lasten ganz ausblenden) sowie einzelne **Solar-Phasen** (L1/L2/L3)
+abschalten.
 
 ## Zweiter Verbraucher (z. B. Wärmepumpe)
 
