@@ -11,7 +11,12 @@ Angezeigt werden:
 - 🏭 **Netz** – Bezug und Einspeisung
 - 🏠 **Verbrauch** – Hauslasten
 
-![Energiefluss](docs/preview.svg)
+Die Kachel ist der Victron-**GUIv2**-Ansicht nachempfunden und unterstützt
+Light- und Dark-Mode.
+
+| Light | Dark |
+|-------|------|
+| ![Energiefluss hell](docs/preview_light.png) | ![Energiefluss dunkel](docs/preview_dark.png) |
 
 ## Voraussetzungen
 
@@ -77,10 +82,12 @@ variieren, gibt es im Abschnitt **„Wertezuordnung (erweitert)"** eine manuelle
 | Ident              | Bezeichnung      | Profil        | Einheit |
 |--------------------|------------------|---------------|---------|
 | `SOC`              | Batterieladung   | `~Battery.100`| %       |
-| `PVPower`          | Solarleistung    | `~Watt`       | W       |
+| `BatteryVoltage`   | Batteriespannung | `~Volt`       | V       |
 | `BatteryPower`     | Batterieleistung | `~Watt`       | W       |
+| `PVPower`          | Solarleistung    | `~Watt`       | W       |
 | `GridPower`        | Netzleistung     | `~Watt`       | W       |
-| `ConsumptionPower` | Verbrauch        | `~Watt`       | W       |
+| `ConsumptionPower` | AC-Verbrauch     | `~Watt`       | W       |
+| `DCPower`          | DC-Lasten        | `~Watt`       | W       |
 | `LastUpdate`       | Letzte Aktual.   | `~UnixTimestamp` | –    |
 
 Diese Variablen lassen sich zusätzlich frei in Diagrammen, Skripten und
