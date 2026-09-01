@@ -1,11 +1,10 @@
 {
     "id": "{89BF6483-34E7-4E87-9C12-AA77C397C627}",
-    "name": "Victron VRM Energiemonitor",
+    "name": "VictronVRMEnergyMonitor",
     "type": 3,
     "vendor": "Victron Energy",
     "aliases": [
         "Victron VRM Energiemonitor",
-        "VRM Energy Monitor",
         "Victron Energie"
     ],
     "url": "https://github.com/teesmokr/symcon-vrm-integration",

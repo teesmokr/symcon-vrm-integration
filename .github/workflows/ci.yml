@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    name: Validate PHP & JSON
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          coverage: none
+
+      - name: PHP syntax check
+        run: |
+          set -e
+          found=0
+          while IFS= read -r -d '' file; do
+            found=1
+            php -l "$file"
+          done < <(find . -name '*.php' -not -path './.git/*' -print0)
+          if [ "$found" -eq 0 ]; then echo "No PHP files found"; fi
+
+      - name: Validate JSON files
+        run: |
+          set -e
+          while IFS= read -r -d '' file; do
+            php -r '$f=$argv[1]; json_decode(file_get_contents($f)); if (json_last_error() !== JSON_ERROR_NONE) { fwrite(STDERR, $f.": ".json_last_error_msg().PHP_EOL); exit(1); } echo $f.": OK".PHP_EOL;' "$file"
+          done < <(find . -name '*.json' -not -path './.git/*' -print0)
