@@ -55,10 +55,10 @@
         <g id="vrmArcs"></g>
 
         <!-- SOC-Ring -->
-        <circle cx="600" cy="260" r="150" fill="none" stroke="var(--track)" stroke-width="22"/>
-        <circle id="vrmRing" cx="600" cy="260" r="150" fill="none" stroke="var(--ring)"
-                stroke-width="22" stroke-linecap="round"
-                transform="rotate(-90 600 260)" stroke-dasharray="942" stroke-dashoffset="942"/>
+        <circle cx="600" cy="260" r="155" fill="none" stroke="var(--track)" stroke-width="20"/>
+        <circle id="vrmRing" cx="600" cy="260" r="155" fill="none" stroke="var(--ring)"
+                stroke-width="20" stroke-linecap="round"
+                transform="rotate(-90 600 260)" stroke-dasharray="974" stroke-dashoffset="974"/>
 
         <!-- Batterie-Zentrum -->
         <g>
@@ -71,7 +71,7 @@
             <text x="600" y="298" font-size="104" text-anchor="middle">
                 <tspan class="val" id="vrmSoc" font-weight="700">–</tspan><tspan class="unit" font-size="60">%</tspan>
             </text>
-            <text class="val" x="600" y="346" font-size="34" font-weight="500" text-anchor="middle" id="vrmBattSub">– V   – W</text>
+            <text class="val" x="600" y="340" font-size="28" font-weight="500" text-anchor="middle" id="vrmBattSub">– V   – W</text>
         </g>
 
         <!-- Netz (links oben) -->
@@ -113,7 +113,7 @@
 <script>
     (function () {
         var initial = /*__INITIAL_DATA__*/null;
-        var CX = 600, CY = 260, RING = 150, C = 2 * Math.PI * RING;
+        var CX = 600, CY = 260, RING = 155, C = 2 * Math.PI * RING;
         var THR = 3; // W Rauschschwelle
 
         function polar(r, deg) {
@@ -199,7 +199,7 @@
             document.getElementById('vrmSoc').textContent = soc === null ? '–' : Math.round(soc);
             var v = (d.battVoltage === null || d.battVoltage === undefined) ? null : d.battVoltage;
             document.getElementById('vrmBattSub').textContent =
-                (v === null ? '–' : v.toFixed(2).replace('.', ',') + ' V') + '   ' + fmt(batt) + ' W';
+                (v === null ? '–' : v.toFixed(2).replace('.', ',') + ' V') + '  ' + fmt(batt) + ' W';
 
             document.getElementById('vrmGridVal').textContent = fmt(grid);
             document.getElementById('vrmSolarVal').textContent = fmt(pv);
